@@ -3017,666 +3017,6 @@
       };
 
       // ================================================================
-      // ユーザー管理モーダル
-      // ================================================================
-      function UserManagementModal({ currentUserId, onClose }) {
-        const [users, setUsers] = useState(() => UserManager.getUsers());
-        const [newId, setNewId] = useState("");
-        const [newPw, setNewPw] = useState("");
-        const [newPwConfirm, setNewPwConfirm] = useState("");
-        const [newRole, setNewRole] = useState("editor");
-        const [addError, setAddError] = useState("");
-        const [adding, setAdding] = useState(false);
-
-        const policy = {
-          len: newPw.length >= 8,
-          alpha: /[a-zA-Z]/.test(newPw),
-          num: /[0-9]/.test(newPw),
-        };
-        const policyOk = policy.len && policy.alpha && policy.num;
-
-        const refresh = () => setUsers(UserManager.getUsers());
-
-        const handleAdd = async (e) => {
-          e.preventDefault();
-          setAddError("");
-          if (!newId.trim()) {
-            setAddError("ユーザーIDを入力してください");
-            return;
-          }
-          if (!policyOk) {
-            setAddError("パスワードがポリシーを満たしていません");
-            return;
-          }
-          if (newPw !== newPwConfirm) {
-            setAddError("パスワードが一致しません");
-            return;
-          }
-          setAdding(true);
-          try {
-            await UserManager.addUser(newId, newPw, newRole);
-            // M-4: ユーザー入力値を含むメッセージは sanitizeToastMsg を経由して表示
-            showToast(`ユーザーを追加しました: ${newId.trim()}`, "success");
-            setNewId("");
-            setNewPw("");
-            setNewPwConfirm("");
-            setNewRole("editor");
-            refresh();
-          } catch (err) {
-            // err.message はシステム側が生成する固定文言のみ（UserManager内で定義）
-            setAddError(err.message || "追加に失敗しました");
-          } finally {
-            setAdding(false);
-          }
-        };
-
-        const handleRoleChange = (uid, role) => {
-          try {
-            UserManager.changeRole(uid, role);
-            showToast("権限を変更しました", "success");
-            refresh();
-          } catch (err) {
-            showToast(err.message || "権限変更に失敗しました", "error");
-          }
-        };
-
-        const handleDelete = async (uid) => {
-          const ok = await showConfirm(
-            "選択したユーザーを削除しますか？\nこの操作は元に戻せません。",
-            "ユーザー削除の確認",
-          );
-          if (!ok) return;
-          try {
-            UserManager.deleteUser(uid);
-            showToast("ユーザーを削除しました", "success");
-            refresh();
-          } catch (err) {
-            showToast(err.message || "削除に失敗しました", "error");
-          }
-        };
-
-        const RoleBadge = (role) => {
-          const map = {
-            admin: "badge-admin",
-            editor: "badge-editor",
-            viewer: "badge-viewer",
-          };
-          const r = ROLES[role] || ROLES.viewer;
-          return React.createElement(
-            "span",
-            { className: `role-badge ${map[role] || "badge-viewer"}` },
-            r.label,
-          );
-        };
-
-        const PolicyItem = (ok, label) =>
-          React.createElement(
-            "div",
-            { className: "policy-item" },
-            React.createElement(
-              "span",
-              { className: ok ? "policy-ok" : "policy-ng" },
-              ok ? "✓" : "○",
-            ),
-            label,
-          );
-
-        return React.createElement(
-          "div",
-          { className: "um-overlay", onClick: onClose },
-          React.createElement(
-            "div",
-            { className: "um-card", onClick: (e) => e.stopPropagation() },
-
-            // ── ヘッダー ──
-            React.createElement(
-              "div",
-              { className: "um-header" },
-              React.createElement(
-                "div",
-                { className: "um-title" },
-                React.createElement(
-                  "svg",
-                  {
-                    width: 20,
-                    height: 20,
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: 2,
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
-                  },
-                  React.createElement("path", {
-                    d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2",
-                  }),
-                  React.createElement("circle", { cx: 9, cy: 7, r: 4 }),
-                  React.createElement("path", {
-                    d: "M23 21v-2a4 4 0 0 0-3-3.87",
-                  }),
-                  React.createElement("path", {
-                    d: "M16 3.13a4 4 0 0 1 0 7.75",
-                  }),
-                ),
-                "ユーザー管理",
-              ),
-              React.createElement(
-                "button",
-                { className: "modal-close", onClick: onClose },
-                "×",
-              ),
-            ),
-
-            React.createElement(
-              "div",
-              { className: "um-body" },
-
-              // ── 新規ユーザー追加 ──
-              React.createElement(
-                "div",
-                { className: "um-section-label" },
-                "新規ユーザー追加",
-              ),
-              React.createElement(
-                "div",
-                { className: "um-add-form" },
-                addError &&
-                  React.createElement(
-                    "div",
-                    { className: "login-error mb-3" },
-                    addError,
-                  ),
-                React.createElement(
-                  "form",
-                  { onSubmit: handleAdd },
-                  React.createElement(
-                    "div",
-                    { className: "um-form-row" },
-                    React.createElement(
-                      "div",
-                      { className: "um-field" },
-                      React.createElement("label", null, "ユーザーID"),
-                      React.createElement("input", {
-                        type: "text",
-                        value: newId,
-                        onChange: (e) => setNewId(e.target.value),
-                        placeholder: "例: user01",
-                        autoComplete: "off",
-                      }),
-                    ),
-                    React.createElement(
-                      "div",
-                      { className: "um-field" },
-                      React.createElement("label", null, "権限"),
-                      React.createElement(
-                        "select",
-                        {
-                          value: newRole,
-                          onChange: (e) => setNewRole(e.target.value),
-                          className: "um-role-select",
-                        },
-                        React.createElement(
-                          "option",
-                          { value: "admin" },
-                          "管理者 — 全機能",
-                        ),
-                        React.createElement(
-                          "option",
-                          { value: "editor" },
-                          "編集者 — 入力・閲覧",
-                        ),
-                        React.createElement(
-                          "option",
-                          { value: "viewer" },
-                          "閲覧のみ — 参照のみ",
-                        ),
-                      ),
-                    ),
-                  ),
-                  React.createElement(
-                    "div",
-                    { className: "um-form-row" },
-                    React.createElement(
-                      "div",
-                      { className: "um-field" },
-                      React.createElement("label", null, "パスワード"),
-                      React.createElement("input", {
-                        type: "password",
-                        value: newPw,
-                        onChange: (e) => setNewPw(e.target.value),
-                        autoComplete: "new-password",
-                      }),
-                    ),
-                    React.createElement(
-                      "div",
-                      { className: "um-field" },
-                      React.createElement("label", null, "パスワード（確認）"),
-                      React.createElement("input", {
-                        type: "password",
-                        value: newPwConfirm,
-                        onChange: (e) => setNewPwConfirm(e.target.value),
-                        autoComplete: "new-password",
-                      }),
-                    ),
-                  ),
-                  React.createElement(
-                    "div",
-                    { className: "policy-hint-box mb-3" },
-                    PolicyItem(policy.len, "8文字以上"),
-                    PolicyItem(policy.alpha, "英字を含む"),
-                    PolicyItem(policy.num, "数字を含む"),
-                  ),
-                  React.createElement(
-                    "button",
-                    {
-                      type: "submit",
-                      disabled: adding,
-                      className: "btn btn-cyan btn-sm",
-                    },
-                    React.createElement(
-                      "svg",
-                      {
-                        width: 14,
-                        height: 14,
-                        viewBox: "0 0 24 24",
-                        fill: "none",
-                        stroke: "currentColor",
-                        strokeWidth: 2.2,
-                        strokeLinecap: "round",
-                        strokeLinejoin: "round",
-                      },
-                      React.createElement("line", {
-                        x1: 12,
-                        y1: 5,
-                        x2: 12,
-                        y2: 19,
-                      }),
-                      React.createElement("line", {
-                        x1: 5,
-                        y1: 12,
-                        x2: 19,
-                        y2: 12,
-                      }),
-                    ),
-                    adding ? "追加中..." : "ユーザーを追加",
-                  ),
-                ),
-              ),
-
-              // ── 権限説明 ──
-              React.createElement(
-                "div",
-                { className: "um-section-label" },
-                "権限一覧",
-              ),
-              React.createElement(
-                "div",
-                {
-                  style: {
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3,1fr)",
-                    gap: "10px",
-                    marginBottom: "20px",
-                  },
-                },
-                [
-                  {
-                    role: "admin",
-                    desc: "ユーザー管理・データ入力・保存・削除・閲覧 すべて可能",
-                  },
-                  {
-                    role: "editor",
-                    desc: "データ入力・保存・削除・閲覧が可能（ユーザー管理不可）",
-                  },
-                  {
-                    role: "viewer",
-                    desc: "データの閲覧のみ可能（入力・保存・削除 不可）",
-                  },
-                ].map((item) =>
-                  React.createElement(
-                    "div",
-                    {
-                      key: item.role,
-                      style: {
-                        background: ROLES[item.role].bg,
-                        border: `1px solid ${ROLES[item.role].border}`,
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                      },
-                    },
-                    RoleBadge(item.role),
-                    React.createElement(
-                      "div",
-                      {
-                        style: {
-                          fontSize: "1.1rem",
-                          color: "var(--slate-400)",
-                          marginTop: "6px",
-                          lineHeight: 1.5,
-                        },
-                      },
-                      item.desc,
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── ユーザー一覧 ──
-              React.createElement(
-                "div",
-                { className: "um-section-label" },
-                `登録ユーザー（${users.length}名）`,
-              ),
-              React.createElement(
-                "table",
-                { className: "um-user-table" },
-                React.createElement(
-                  "thead",
-                  null,
-                  React.createElement(
-                    "tr",
-                    null,
-                    React.createElement("th", null, "ユーザーID"),
-                    React.createElement("th", null, "権限"),
-                    React.createElement("th", null, "登録日"),
-                    React.createElement(
-                      "th",
-                      { style: { width: "80px" } },
-                      "操作",
-                    ),
-                  ),
-                ),
-                React.createElement(
-                  "tbody",
-                  null,
-                  users.map((u) =>
-                    React.createElement(
-                      "tr",
-                      { key: u.id },
-                      React.createElement(
-                        "td",
-                        null,
-                        React.createElement(
-                          "span",
-                          { className: "font-semibold color-white" },
-                          u.id,
-                        ),
-                        u.id === currentUserId &&
-                          React.createElement(
-                            "span",
-                            { className: "um-current-badge" },
-                            "自分",
-                          ),
-                      ),
-                      React.createElement(
-                        "td",
-                        null,
-                        u.id === currentUserId
-                          ? RoleBadge(u.role)
-                          : React.createElement(
-                              "select",
-                              {
-                                value: u.role,
-                                onChange: (e) =>
-                                  handleRoleChange(u.id, e.target.value),
-                                className: "um-role-inline-select",
-                              },
-                              React.createElement(
-                                "option",
-                                { value: "admin" },
-                                "管理者",
-                              ),
-                              React.createElement(
-                                "option",
-                                { value: "editor" },
-                                "編集者",
-                              ),
-                              React.createElement(
-                                "option",
-                                { value: "viewer" },
-                                "閲覧のみ",
-                              ),
-                            ),
-                      ),
-                      React.createElement(
-                        "td",
-                        {
-                          style: {
-                            color: "var(--slate-500)",
-                            fontSize: "1.1rem",
-                          },
-                        },
-                        u.createdAt
-                          ? new Date(u.createdAt).toLocaleDateString("ja-JP")
-                          : "-",
-                      ),
-                      React.createElement(
-                        "td",
-                        null,
-                        u.id !== currentUserId
-                          ? React.createElement(
-                              "button",
-                              {
-                                onClick: () => handleDelete(u.id),
-                                className: "btn btn-xs btn-danger",
-                              },
-                              "削除",
-                            )
-                          : React.createElement(
-                              "span",
-                              {
-                                style: {
-                                  fontSize: "1.1rem",
-                                  color: "var(--slate-600)",
-                                },
-                              },
-                              "—",
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            React.createElement(
-              "div",
-              { className: "um-footer" },
-              React.createElement(
-                "button",
-                { className: "btn btn-ghost btn-sm", onClick: onClose },
-                "閉じる",
-              ),
-            ),
-          ),
-        );
-      }
-
-      // ================================================================
-      // 初期設定画面
-      // ================================================================
-      function SetupScreen({ onDone }) {
-        const [userId, setUserId] = useState("");
-        const [password, setPassword] = useState("");
-        const [confirm, setConfirm] = useState("");
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState("");
-
-        const policy = {
-          len: password.length >= 8,
-          alpha: /[a-zA-Z]/.test(password),
-          num: /[0-9]/.test(password),
-        };
-        const policyOk = policy.len && policy.alpha && policy.num;
-
-        const handle = async (e) => {
-          e.preventDefault();
-          setError("");
-          if (!userId.trim()) {
-            setError("ユーザーIDを入力してください");
-            return;
-          }
-          if (!policyOk) {
-            setError("パスワードがポリシーを満たしていません");
-            return;
-          }
-          if (password !== confirm) {
-            setError("パスワードが一致しません");
-            return;
-          }
-          setLoading(true);
-          try {
-            await UserManager.init(userId, password);
-            showToast("管理者アカウントを作成しました", "success");
-            onDone();
-          } catch (err) {
-            setError(err.message || "初期化に失敗しました");
-          } finally {
-            setLoading(false);
-          }
-        };
-
-        const PolicyItem = (ok, label) =>
-          React.createElement(
-            "div",
-            { className: "policy-item" },
-            React.createElement(
-              "span",
-              { className: ok ? "policy-ok" : "policy-ng" },
-              ok ? "✓" : "○",
-            ),
-            label,
-          );
-
-        return React.createElement(
-          "div",
-          { className: "login-wrapper" },
-          React.createElement(
-            "div",
-            { className: "setup-card" },
-            React.createElement(
-              "div",
-              { className: "login-header" },
-              React.createElement(
-                "div",
-                { className: "login-icon" },
-                React.createElement(
-                  "svg",
-                  {
-                    width: 28,
-                    height: 28,
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: 1.5,
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
-                  },
-                  React.createElement("path", {
-                    d: "M2 20V8l5 4V8l5 4V4l10 5v11H2z",
-                  }),
-                  React.createElement("rect", {
-                    x: 6,
-                    y: 14,
-                    width: 3,
-                    height: 6,
-                  }),
-                  React.createElement("rect", {
-                    x: 11,
-                    y: 14,
-                    width: 3,
-                    height: 6,
-                  }),
-                ),
-              ),
-              React.createElement(
-                "div",
-                { className: "login-title" },
-                "初期設定",
-              ),
-              React.createElement(
-                "div",
-                { className: "login-sub" },
-                "管理者アカウントを作成します",
-              ),
-            ),
-            error &&
-              React.createElement("div", { className: "login-error" }, error),
-            React.createElement(
-              "form",
-              { onSubmit: handle },
-              React.createElement(
-                "div",
-                { className: "mb-4" },
-                React.createElement(
-                  "label",
-                  { className: "login-form-label" },
-                  "ユーザーID",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  value: userId,
-                  onChange: (e) => setUserId(e.target.value),
-                  className: "form-input",
-                  placeholder: "例: admin",
-                  autoComplete: "username",
-                }),
-              ),
-              React.createElement(
-                "div",
-                { className: "mb-2" },
-                React.createElement(
-                  "label",
-                  { className: "login-form-label" },
-                  "パスワード",
-                ),
-                React.createElement("input", {
-                  type: "password",
-                  value: password,
-                  onChange: (e) => setPassword(e.target.value),
-                  className: "form-input",
-                  autoComplete: "new-password",
-                }),
-              ),
-              React.createElement(
-                "div",
-                { className: "password-policy-hint mb-4" },
-                PolicyItem(policy.len, "8文字以上"),
-                PolicyItem(policy.alpha, "英字を含む"),
-                PolicyItem(policy.num, "数字を含む"),
-              ),
-              React.createElement(
-                "div",
-                { className: "mb-6" },
-                React.createElement(
-                  "label",
-                  { className: "login-form-label" },
-                  "パスワード（確認）",
-                ),
-                React.createElement("input", {
-                  type: "password",
-                  value: confirm,
-                  onChange: (e) => setConfirm(e.target.value),
-                  className: "form-input",
-                  autoComplete: "new-password",
-                }),
-              ),
-              React.createElement(
-                "button",
-                {
-                  type: "submit",
-                  disabled: loading,
-                  className: "btn btn-cyan btn-full",
-                  style: { fontSize: "1.4rem", padding: "12px 0" },
-                },
-                loading ? "処理中..." : "アカウントを作成",
-              ),
-            ),
-          ),
-        );
-      }
-
-      // ================================================================
       // ================================================================
       // 閲覧ダッシュボード画面（ログイン前）
       // ================================================================
@@ -4042,7 +3382,7 @@
             React.createElement(
               "div",
               { className: "dashboard-title" },
-              "生産管理 最新累積データ（閲覧専用）",
+              "生産管理 最新累積データ",
             ),
             React.createElement(
               "button",
@@ -4063,7 +3403,7 @@
                 React.createElement(
                   "div",
                   { className: "text-center color-slate5 p-8" },
-                  "データがありません。ログインしてデータを入力・保存すると表示されます。",
+                  "データがありません。データ入力画面で入力・保存すると表示されます。",
                 ),
                 React.createElement(
                   "button",
@@ -4349,284 +3689,11 @@
       // ================================================================
       // ウェルカム画面
       // ================================================================
-      function WelcomeScreen({ session, onDone }) {
-        const DISPLAY_MS = 3200;
-
-        useEffect(() => {
-          const t = setTimeout(onDone, DISPLAY_MS);
-          return () => clearTimeout(t);
-        }, []);
-
-        const greeting = (() => {
-          const h = new Date().getHours();
-          if (h >= 5 && h < 12) return "おはようございます";
-          if (h >= 12 && h < 18) return "こんにちは";
-          return "お疲れ様です";
-        })();
-
-        const roleLabel = {
-          admin: "管理者",
-          editor: "編集者",
-          viewer: "閲覧者",
-        };
-
-        const particles = [
-          { top: "12%", left: "8%", size: 5, dur: "3.4s", delay: "0s" },
-          { top: "22%", left: "92%", size: 4, dur: "4.1s", delay: "0.7s" },
-          { top: "50%", left: "4%", size: 3, dur: "5.2s", delay: "1.1s" },
-          { top: "78%", left: "88%", size: 6, dur: "3.8s", delay: "0.3s" },
-          { top: "88%", left: "15%", size: 4, dur: "4.6s", delay: "1.8s" },
-          { top: "35%", left: "95%", size: 3, dur: "3.2s", delay: "2.0s" },
-          { top: "65%", left: "2%", size: 5, dur: "4.9s", delay: "0.5s" },
-          { top: "8%", left: "55%", size: 3, dur: "6.0s", delay: "1.4s" },
-          { top: "92%", left: "50%", size: 4, dur: "3.6s", delay: "0.9s" },
-          { top: "45%", left: "50%", size: 2, dur: "7.0s", delay: "2.5s" },
-        ];
-
-        return React.createElement(
-          "div",
-          { className: "welcome-screen" },
-          React.createElement("div", { className: "welcome-corner-tr" }),
-          React.createElement("div", { className: "welcome-corner-bl" }),
-
-          React.createElement(
-            "div",
-            { className: "welcome-particles" },
-            ...particles.map((p, i) =>
-              React.createElement("div", {
-                key: i,
-                className: "wp",
-                style: {
-                  top: p.top,
-                  left: p.left,
-                  width: p.size + "px",
-                  height: p.size + "px",
-                  animationDuration: p.dur,
-                  animationDelay: p.delay,
-                },
-              }),
-            ),
-          ),
-
-          React.createElement(
-            "div",
-            { className: "welcome-content" },
-            React.createElement(
-              "div",
-              { className: "welcome-greeting" },
-              greeting,
-            ),
-            React.createElement(
-              "div",
-              { className: "welcome-title" },
-              "ようこそ",
-            ),
-            React.createElement(
-              "div",
-              { className: "welcome-user-info" },
-              React.createElement("div", null, session.userId, " さん"),
-              React.createElement(
-                "div",
-                { className: "welcome-role-badge" },
-                roleLabel[session.role] || session.role,
-              ),
-            ),
-            React.createElement(
-              "div",
-              { className: "welcome-system-name" },
-              "Production Management System",
-            ),
-          ),
-
-          React.createElement(
-            "div",
-            { className: "welcome-progress-wrap" },
-            React.createElement("div", { className: "welcome-progress-bar" }),
-          ),
-        );
-      }
-
-      // ログイン画面
-      // ================================================================
-      function LoginScreen({ onLogin }) {
-        const [userId, setUserId] = useState("");
-        const [password, setPassword] = useState("");
-        const [error, setError] = useState("");
-        const [loading, setLoading] = useState(false);
-        const [lockRemain, setLockRemain] = useState(0);
-
-        useEffect(() => {
-          if (lockRemain <= 0) return;
-          const t = setInterval(() => {
-            setLockRemain((prev) => {
-              if (prev <= 1000) {
-                clearInterval(t);
-                return 0;
-              }
-              return prev - 1000;
-            });
-          }, 1000);
-          return () => clearInterval(t);
-        }, [lockRemain]);
-
-        const handle = async (e) => {
-          e.preventDefault();
-          setError("");
-          if (!userId.trim() || !password) {
-            setError("ユーザーIDとパスワードを入力してください");
-            return;
-          }
-          setLoading(true);
-          try {
-            const session = await UserManager.authenticate(userId, password);
-            if (!session) {
-              const rem = LockManager.remaining(userId.trim());
-              setError(`パスワードが正しくありません。残り試行回数: ${rem}回`);
-            } else {
-              // M-4: session.userId はサーバー由来でなくローカル検証済みだが、
-              // sanitizeToastMsg が showToast 内で適用されるため安全
-              showToast("ログインしました", "success");
-              onLogin(session);
-            }
-          } catch (err) {
-            const ms = LockManager.remainMs(userId.trim());
-            if (ms > 0) setLockRemain(ms);
-            setError(err.message || "ログインに失敗しました");
-          } finally {
-            setLoading(false);
-          }
-        };
-
-        return React.createElement(
-          "div",
-          { className: "login-wrapper" },
-          React.createElement(
-            "div",
-            { className: "login-card" },
-            React.createElement(
-              "div",
-              { className: "login-header" },
-              React.createElement(
-                "div",
-                { className: "login-icon" },
-                React.createElement(
-                  "svg",
-                  {
-                    width: 28,
-                    height: 28,
-                    viewBox: "0 0 24 24",
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: 1.5,
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
-                  },
-                  React.createElement("path", {
-                    d: "M2 20V8l5 4V8l5 4V4l10 5v11H2z",
-                  }),
-                  React.createElement("rect", {
-                    x: 6,
-                    y: 14,
-                    width: 3,
-                    height: 6,
-                  }),
-                  React.createElement("rect", {
-                    x: 11,
-                    y: 14,
-                    width: 3,
-                    height: 6,
-                  }),
-                ),
-              ),
-              React.createElement(
-                "div",
-                { className: "login-title" },
-                "生産管理システム",
-              ),
-              React.createElement(
-                "div",
-                { className: "login-sub" },
-                "Production Management System",
-              ),
-            ),
-            lockRemain > 0 &&
-              React.createElement(
-                "div",
-                { className: "lock-info" },
-                (() => {
-                  const totalSec = Math.ceil(lockRemain / 1000);
-                  const m = Math.floor(totalSec / 60);
-                  const s = totalSec % 60;
-                  const timeStr =
-                    m > 0 ? `${m}分${s > 0 ? s + "秒" : ""}` : `${s}秒`;
-                  return `🔒 アカウントがロック中です。${timeStr}後に再試行できます。`;
-                })(),
-              ),
-            error &&
-              !lockRemain &&
-              React.createElement("div", { className: "login-error" }, error),
-            React.createElement(
-              "form",
-              { onSubmit: handle },
-              React.createElement(
-                "div",
-                { className: "mb-4" },
-                React.createElement(
-                  "label",
-                  { className: "login-form-label" },
-                  "ユーザーID",
-                ),
-                React.createElement("input", {
-                  type: "text",
-                  value: userId,
-                  onChange: (e) => setUserId(e.target.value),
-                  className: "form-input",
-                  placeholder: "ユーザーIDを入力",
-                  autoComplete: "username",
-                  disabled: lockRemain > 0,
-                }),
-              ),
-              React.createElement(
-                "div",
-                { className: "mb-6" },
-                React.createElement(
-                  "label",
-                  { className: "login-form-label" },
-                  "パスワード",
-                ),
-                React.createElement("input", {
-                  type: "password",
-                  value: password,
-                  onChange: (e) => setPassword(e.target.value),
-                  className: "form-input",
-                  placeholder: "パスワードを入力",
-                  autoComplete: "current-password",
-                  disabled: lockRemain > 0,
-                }),
-              ),
-              React.createElement(
-                "button",
-                {
-                  type: "submit",
-                  disabled: loading || lockRemain > 0,
-                  className: "btn btn-cyan btn-full",
-                  style: { fontSize: "1.4rem", padding: "12px 0" },
-                },
-                loading ? "認証中..." : "ログイン",
-              ),
-            ),
-          ),
-        );
-      }
-
       // ================================================================
       // 生産管理アプリ本体
       // ================================================================
       function ProductionApp({ session, onLogout }) {
-        const userRole = session ? session.role || "viewer" : "viewer";
-        const isEditable = canEdit(userRole);
-        const isAdmin = canManage(userRole);
-        const [showUserMgmt, setShowUserMgmt] = useState(false);
+        const isEditable = true;
 
         const [inputMode, setInputMode] = useState(() => {
           try {
@@ -5993,13 +5060,6 @@
             style: { minHeight: "100vh", padding: "20px 24px" },
           },
 
-          // ── ユーザー管理モーダル ──
-          showUserMgmt &&
-            React.createElement(UserManagementModal, {
-              currentUserId: session ? session.userId : "",
-              onClose: () => setShowUserMgmt(false),
-            }),
-
           // ── ヘッダー ──
           React.createElement(
             "div",
@@ -6052,15 +5112,14 @@
                   { className: "app-header-sub" },
                   "Production Management System",
                 ),
-                session &&
-                  React.createElement(
-                    "span",
-                    {
-                      className: `role-badge ${userRole === "admin" ? "badge-admin" : userRole === "editor" ? "badge-editor" : "badge-viewer"}`,
-                      style: { fontSize: "1rem" },
-                    },
-                    `${session.userId}  ·  ${ROLES[userRole] ? ROLES[userRole].label : userRole}`,
-                  ),
+                React.createElement(
+                  "span",
+                  {
+                    className: "role-badge badge-admin",
+                    style: { fontSize: "1rem" },
+                  },
+                  "公開版",
+                ),
               ),
             ),
             React.createElement(
@@ -6088,45 +5147,12 @@
                   ),
                   "モード選択に戻る",
                 ),
-              isAdmin &&
-                React.createElement(
-                  "button",
-                  {
-                    onClick: () => setShowUserMgmt(true),
-                    className: "btn btn-ghost btn-sm",
-                  },
-                  React.createElement(
-                    "svg",
-                    {
-                      width: 14,
-                      height: 14,
-                      viewBox: "0 0 24 24",
-                      fill: "none",
-                      stroke: "currentColor",
-                      strokeWidth: 2,
-                      strokeLinecap: "round",
-                      strokeLinejoin: "round",
-                    },
-                    React.createElement("path", {
-                      d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2",
-                    }),
-                    React.createElement("circle", { cx: 9, cy: 7, r: 4 }),
-                    React.createElement("path", {
-                      d: "M23 21v-2a4 4 0 0 0-3-3.87",
-                    }),
-                    React.createElement("path", {
-                      d: "M16 3.13a4 4 0 0 1 0 7.75",
-                    }),
-                  ),
-                  "ユーザー管理",
-                ),
               React.createElement(
                 "button",
                 {
                   onClick: async () => {
-                    UserManager.logout();
-                    showToast("ログアウトしました", "info");
-                    setTimeout(() => onLogout(), 800);
+                    showToast("ダッシュボードへ戻ります", "info");
+                    setTimeout(() => onLogout(), 300);
                   },
                   className: "btn btn-ghost btn-sm",
                 },
@@ -6155,7 +5181,7 @@
                     y2: "12",
                   }),
                 ),
-                "ログアウト",
+                "トップへ戻る",
               ),
             ),
           ),
@@ -6165,37 +5191,12 @@
             React.createElement(
               "div",
               { className: "anim-fade" },
-              !isEditable &&
-                React.createElement(
-                  "div",
-                  { className: "viewer-notice" },
-                  React.createElement(
-                    "svg",
-                    {
-                      width: 15,
-                      height: 15,
-                      viewBox: "0 0 24 24",
-                      fill: "none",
-                      stroke: "currentColor",
-                      strokeWidth: 2,
-                      strokeLinecap: "round",
-                      strokeLinejoin: "round",
-                    },
-                    React.createElement("path", {
-                      d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z",
-                    }),
-                    React.createElement("circle", { cx: 12, cy: 12, r: 3 }),
-                  ),
-                  "閲覧専用モードです。データの入力・保存・削除はできません。",
-                ),
               React.createElement(
                 "div",
                 {
                   className: "text-xl font-bold color-slate4 text-center mb-6",
                 },
-                isEditable
-                  ? "データ入力モードを選択してください"
-                  : "閲覧するモードを選択してください",
+                "データ入力モードを選択してください",
               ),
               React.createElement(
                 "div",
@@ -6276,9 +5277,7 @@
                       React.createElement(
                         "div",
                         { className: "text-xs color-slate5 mt-1" },
-                        isEditable
-                          ? "過去のデータを確認・修正"
-                          : "過去のデータを閲覧",
+                        "過去のデータを確認・修正",
                       ),
                     ),
                   ),
@@ -6352,9 +5351,7 @@
                       React.createElement(
                         "div",
                         { className: "text-xs color-slate5 mt-1" },
-                        isEditable
-                          ? "過去のデータを確認・修正"
-                          : "過去のデータを閲覧",
+                        "過去のデータを確認・修正",
                       ),
                     ),
                   ),
@@ -8376,9 +7373,8 @@
       // ルートコンポーネント（認証フロー制御）
       // ================================================================
       function App() {
-        // 初期フェーズ: 未初期化なら setup、初期化済みなら閲覧ダッシュボード、セッションありなら loading
+        // 公開用: 起動時にダミーデータとダッシュボード集計を準備してから表示
         const [phase, setPhase] = useState(() => {
-          // 公開用: 起動直後にダミーデータとダッシュボード集計を準備してから表示
           return "public_loading";
         });
         const [session, setSession] = useState(null);
@@ -8397,24 +7393,9 @@
             }
           })();
         }, [phase]);
-
-        // M-3: 起動時の HMAC 検証（loading フェーズ時のみ実行）
-        useEffect(() => {
-          if (phase !== "loading") return;
-          UserManager.getSession().then((s) => {
-            if (s) {
-              setSession(s);
-              setPhase("app");
-            } else {
-              setPhase("login");
-            }
-          });
-        }, [phase]);
-
-        const handleSetupDone = () => setPhase("login");
         const handleDashboardLoginClick = async () => {
           try {
-            // 公開用: ログイン画面をスキップしてモード選択画面へ
+            // 公開用: 認証を使わずモード選択画面へ
             await initSessionKey(PUBLIC_PASSPHRASE, PUBLIC_USER_ID);
             await seedDummyData10DaysEnsure();
             setSession(buildPublicSession());
@@ -8424,36 +7405,22 @@
             showToast("起動に失敗しました。再読み込みしてください。", "error");
           }
         };
-        const handleLogin = (s) => {
-          setSession(s);
-          setPhase("welcome");
-        };
-        const handleWelcomeDone = () => setPhase("app");
         const handleLogout = () => {
-          UserManager.logout();
+          clearSession();
           setSession(null);
           setPhase("dashboard");
         };
 
-        if (phase === "loading" || phase === "public_loading") return null;
+        if (phase === "public_loading") return null;
 
         return React.createElement(
           React.Fragment,
           null,
           React.createElement(ToastProvider, null),
           React.createElement(ConfirmDialog, null),
-          phase === "setup" &&
-            React.createElement(SetupScreen, { onDone: handleSetupDone }),
           phase === "dashboard" &&
             React.createElement(DashboardScreen, {
               onLoginClick: handleDashboardLoginClick,
-            }),
-          phase === "login" &&
-            React.createElement(LoginScreen, { onLogin: handleLogin }),
-          phase === "welcome" &&
-            React.createElement(WelcomeScreen, {
-              session,
-              onDone: handleWelcomeDone,
             }),
           phase === "app" &&
             React.createElement(ProductionApp, {
