@@ -2108,6 +2108,255 @@
           return false;
         }
       };
+      const rebuildDashboardSummary = async () => {
+        try {
+          const keys = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("history_")) keys.push(k);
+          }
+          let allRecords = [];
+          for (const k of keys) {
+            const data = await secureGet(k, []);
+            allRecords = allRecords.concat(Array.isArray(data) ? data : []);
+          }
+          const sortRec = (a, b) => {
+            const dc = (a.date || "").localeCompare(b.date || "");
+            return dc !== 0
+              ? dc
+              : String(a.shift || "1").localeCompare(String(b.shift || "1"));
+          };
+          allRecords.sort(sortRec);
+
+          const processLabels = [
+            "①オープナー",
+            "②カード機",
+            "③フォーマー",
+            "④AJ",
+            "⑤処理機",
+            "⑥BDS",
+            "⑦SSD",
+            "⑧熱シリンダー",
+            "⑨ワインダー",
+            "⑩スリッター",
+            "⑪原反溜まり",
+            "⑫段替遅れ",
+            "⑬定掃遅れ",
+            "⑭付帯設備",
+          ];
+          const processKeys = [
+            "opener",
+            "cardMachine",
+            "former",
+            "aj",
+            "processor",
+            "bds",
+            "ssd",
+            "heatCylinder",
+            "winder",
+            "slitter",
+            "stockDelay",
+            "setupDelay",
+            "cleaningDelay",
+            "auxiliaryEquipment",
+          ];
+          const processColors = [
+            "#22d3ee",
+            "#0ea5e9",
+            "#06b6d4",
+            "#6366f1",
+            "#8b5cf6",
+            "#a855f7",
+            "#ec4899",
+            "#f43f5e",
+            "#f59e0b",
+            "#10b981",
+            "#14b8a6",
+            "#3b82f6",
+            "#64748b",
+            "#94a3b8",
+          ];
+
+          const summary = {
+            updatedAt: new Date().toISOString(),
+            yield: null,
+            operating: null,
+          };
+
+          const yieldRecs = allRecords
+            .filter(
+              (r) => r.rawMaterial !== undefined && r.rawMaterial !== null,
+            )
+            .sort(sortRec);
+          if (yieldRecs.length > 0) {
+            const latest = yieldRecs[yieldRecs.length - 1];
+            const filtered = yieldRecs.filter((r) => {
+              if (r.date < latest.date) return true;
+              if (
+                r.date === latest.date &&
+                String(r.shift || "1") <= String(latest.shift || "1")
+              )
+                return true;
+              return false;
+            });
+            let totR = 0,
+              totStd = 0,
+              totAct = 0,
+              totUnknown = 0;
+            const lossMap = {};
+            filtered.forEach((r) => {
+              totR += parseFloat(r.rawMaterial) || 0;
+              totStd += parseFloat(r.standardProductYield) || 0;
+              totAct += parseFloat(r.actualProductYield) || 0;
+              totUnknown += parseFloat(r.unknownLoss) || 0;
+              if (r.losses)
+                r.losses.forEach((l) => {
+                  if (!lossMap[l.category])
+                    lossMap[l.category] = {
+                      category: l.category,
+                      amount: 0,
+                      color: l.color,
+                    };
+                  lossMap[l.category].amount += parseFloat(l.amount) || 0;
+                });
+            });
+            const stdRate = totR > 0 ? (totStd / totR) * 100 : 0;
+            const actRate = totR > 0 ? (totAct / totR) * 100 : 0;
+            const monthlyWeightLoss = totAct - totStd;
+            const allLossItems = [];
+            if (monthlyWeightLoss > 0)
+              allLossItems.push({
+                label: "目付損",
+                value: monthlyWeightLoss,
+                color: "#ef4444",
+              });
+            Object.values(lossMap).forEach((l) => {
+              if ((parseFloat(l.amount) || 0) > 0)
+                allLossItems.push({
+                  label: l.category,
+                  value: parseFloat(l.amount) || 0,
+                  color: l.color,
+                });
+            });
+            if (totUnknown !== 0)
+              allLossItems.push({
+                label: totUnknown >= 0 ? "不明ロス" : "不明ロス(過剰)",
+                value: Math.abs(totUnknown),
+                color: totUnknown >= 0 ? "#94a3b8" : "#10b981",
+              });
+            const lossData = allLossItems.filter((i) => i.value > 0);
+            const labels = [];
+            const dataActual = [];
+            const dataStd = [];
+            filtered.forEach((r, i) => {
+              const d = new Date(r.date + "T00:00:00");
+              labels.push(`${d.getDate()}日-${r.shift || "1"}勤`);
+              const sub = filtered.slice(0, i + 1);
+              let sR = 0,
+                sA = 0,
+                sStd = 0;
+              sub.forEach((x) => {
+                sR += parseFloat(x.rawMaterial) || 0;
+                sA += parseFloat(x.actualProductYield) || 0;
+                sStd += parseFloat(x.standardProductYield) || 0;
+              });
+              dataActual.push(sR > 0 ? (sA / sR) * 100 : 0);
+              dataStd.push(sR > 0 ? (sStd / sR) * 100 : 0);
+            });
+            summary.yield = {
+              latestDate: latest.date,
+              latestShift: latest.shift || "1",
+              cumulativeStdRate: parseFloat(stdRate.toFixed(2)),
+              cumulativeActualRate: parseFloat(actRate.toFixed(2)),
+              lossChartData: {
+                labels: lossData.map((i) => i.label),
+                data: lossData.map((i) => i.value),
+                colors: lossData.map((i) => i.color),
+                rawMaterialTotal: totR,
+              },
+              trendData: { labels, actual: dataActual, standard: dataStd },
+            };
+          }
+
+          const opRecs = allRecords
+            .filter(
+              (r) => r.availableTime !== undefined && r.availableTime !== null,
+            )
+            .sort(sortRec);
+          if (opRecs.length > 0) {
+            const latest = opRecs[opRecs.length - 1];
+            const filtered = opRecs.filter((r) => {
+              if (r.date < latest.date) return true;
+              if (
+                r.date === latest.date &&
+                String(r.shift || "1") <= String(latest.shift || "1")
+              )
+                return true;
+              return false;
+            });
+            let totA = 0,
+              totO = 0;
+            filtered.forEach((r) => {
+              totA += parseFloat(r.availableTime) || 0;
+              totO += parseFloat(r.actualOperatingTime) || 0;
+            });
+            const rate = totA > 0 ? (totO / totA) * 100 : 0;
+            const agg = {};
+            processKeys.forEach((k) => {
+              agg[k] = 0;
+            });
+            filtered.forEach((r) => {
+              if (r.processStopTimes)
+                processKeys.forEach((k) => {
+                  agg[k] += parseFloat(r.processStopTimes[k]) || 0;
+                });
+            });
+            const procData = [];
+            const procLabels = [];
+            const procColors = [];
+            processKeys.forEach((k, i) => {
+              const v = agg[k] || 0;
+              if (v > 0) {
+                procData.push(v);
+                procLabels.push(processLabels[i]);
+                procColors.push(processColors[i]);
+              }
+            });
+            const opLabels = [];
+            const opData = [];
+            filtered.forEach((r, i) => {
+              const d = new Date(r.date + "T00:00:00");
+              opLabels.push(`${d.getDate()}日-${r.shift || "1"}勤`);
+              const sub = filtered.slice(0, i + 1);
+              let sA = 0,
+                sO = 0;
+              sub.forEach((x) => {
+                sA += parseFloat(x.availableTime) || 0;
+                sO += parseFloat(x.actualOperatingTime) || 0;
+              });
+              opData.push(sA > 0 ? (sO / sA) * 100 : 0);
+            });
+            summary.operating = {
+              latestDate: latest.date,
+              latestShift: latest.shift || "1",
+              cumulativeRate: parseFloat(rate.toFixed(2)),
+              totalOperatingMinutes: totO,
+              totalAvailableMinutes: totA,
+              trendData: { labels: opLabels, data: opData },
+              processStopChartData: {
+                labels: procLabels,
+                data: procData,
+                colors: procColors,
+              },
+            };
+          }
+
+          safeSetItem(DASHBOARD_SUMMARY_KEY, JSON.stringify(summary));
+          return summary;
+        } catch {
+          return null;
+        }
+      };
 
       // ================================================================
       // ユーティリティ
@@ -5282,255 +5531,10 @@
           }
         };
 
-        const updateDashboardSummary = useCallback(async () => {
-          try {
-            const keys = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const k = localStorage.key(i);
-              if (k && k.startsWith("history_")) keys.push(k);
-            }
-            let allRecords = [];
-            for (const k of keys) {
-              const data = await secureGet(k, []);
-              allRecords = allRecords.concat(Array.isArray(data) ? data : []);
-            }
-            const sortRec = (a, b) => {
-              const dc = (a.date || "").localeCompare(b.date || "");
-              return dc !== 0
-                ? dc
-                : String(a.shift || "1").localeCompare(String(b.shift || "1"));
-            };
-            allRecords.sort(sortRec);
-
-            const processLabels = [
-              "①オープナー",
-              "②カード機",
-              "③フォーマー",
-              "④AJ",
-              "⑤処理機",
-              "⑥BDS",
-              "⑦SSD",
-              "⑧熱シリンダー",
-              "⑨ワインダー",
-              "⑩スリッター",
-              "⑪原反溜まり",
-              "⑫段替遅れ",
-              "⑬定掃遅れ",
-              "⑭付帯設備",
-            ];
-            const processKeys = [
-              "opener",
-              "cardMachine",
-              "former",
-              "aj",
-              "processor",
-              "bds",
-              "ssd",
-              "heatCylinder",
-              "winder",
-              "slitter",
-              "stockDelay",
-              "setupDelay",
-              "cleaningDelay",
-              "auxiliaryEquipment",
-            ];
-            const processColors = [
-              "#22d3ee",
-              "#0ea5e9",
-              "#06b6d4",
-              "#6366f1",
-              "#8b5cf6",
-              "#a855f7",
-              "#ec4899",
-              "#f43f5e",
-              "#f59e0b",
-              "#10b981",
-              "#14b8a6",
-              "#3b82f6",
-              "#64748b",
-              "#94a3b8",
-            ];
-
-            const summary = {
-              updatedAt: new Date().toISOString(),
-              yield: null,
-              operating: null,
-            };
-
-            const yieldRecs = allRecords
-              .filter(
-                (r) => r.rawMaterial !== undefined && r.rawMaterial !== null,
-              )
-              .sort(sortRec);
-            if (yieldRecs.length > 0) {
-              const latest = yieldRecs[yieldRecs.length - 1];
-              const filtered = yieldRecs.filter((r) => {
-                if (r.date < latest.date) return true;
-                if (
-                  r.date === latest.date &&
-                  String(r.shift || "1") <= String(latest.shift || "1")
-                )
-                  return true;
-                return false;
-              });
-              let totR = 0,
-                totStd = 0,
-                totAct = 0,
-                totRecycle = 0,
-                totUnknown = 0;
-              const lossMap = {};
-              filtered.forEach((r) => {
-                totR += parseFloat(r.rawMaterial) || 0;
-                totStd += parseFloat(r.standardProductYield) || 0;
-                totAct += parseFloat(r.actualProductYield) || 0;
-                totRecycle += parseFloat(r.lossRecycleInput) || 0;
-                totUnknown += parseFloat(r.unknownLoss) || 0;
-                if (r.losses)
-                  r.losses.forEach((l) => {
-                    if (!lossMap[l.category])
-                      lossMap[l.category] = {
-                        category: l.category,
-                        amount: 0,
-                        color: l.color,
-                      };
-                    lossMap[l.category].amount += parseFloat(l.amount) || 0;
-                  });
-              });
-              const stdRate = totR > 0 ? (totStd / totR) * 100 : 0;
-              const actRate = totR > 0 ? (totAct / totR) * 100 : 0;
-              const monthlyWeightLoss = totAct - totStd;
-              const allLossItems = [];
-              if (monthlyWeightLoss > 0)
-                allLossItems.push({
-                  label: "目付損",
-                  value: monthlyWeightLoss,
-                  color: "#ef4444",
-                });
-              Object.values(lossMap).forEach((l) => {
-                if ((parseFloat(l.amount) || 0) > 0)
-                  allLossItems.push({
-                    label: l.category,
-                    value: parseFloat(l.amount) || 0,
-                    color: l.color,
-                  });
-              });
-              if (totUnknown !== 0)
-                allLossItems.push({
-                  label: totUnknown >= 0 ? "不明ロス" : "不明ロス(過剰)",
-                  value: Math.abs(totUnknown),
-                  color: totUnknown >= 0 ? "#94a3b8" : "#10b981",
-                });
-              const lossData = allLossItems.filter((i) => i.value > 0);
-              const labels = [];
-              const dataActual = [];
-              const dataStd = [];
-              filtered.forEach((r, i) => {
-                const d = new Date(r.date + "T00:00:00");
-                labels.push(`${d.getDate()}日-${r.shift || "1"}勤`);
-                const sub = filtered.slice(0, i + 1);
-                let sR = 0,
-                  sA = 0,
-                  sStd = 0;
-                sub.forEach((x) => {
-                  sR += parseFloat(x.rawMaterial) || 0;
-                  sA += parseFloat(x.actualProductYield) || 0;
-                  sStd += parseFloat(x.standardProductYield) || 0;
-                });
-                dataActual.push(sR > 0 ? (sA / sR) * 100 : 0);
-                dataStd.push(sR > 0 ? (sStd / sR) * 100 : 0);
-              });
-              summary.yield = {
-                latestDate: latest.date,
-                latestShift: latest.shift || "1",
-                cumulativeStdRate: parseFloat(stdRate.toFixed(2)),
-                cumulativeActualRate: parseFloat(actRate.toFixed(2)),
-                lossChartData: {
-                  labels: lossData.map((i) => i.label),
-                  data: lossData.map((i) => i.value),
-                  colors: lossData.map((i) => i.color),
-                  rawMaterialTotal: totR,
-                },
-                trendData: { labels, actual: dataActual, standard: dataStd },
-              };
-            }
-
-            const opRecs = allRecords
-              .filter(
-                (r) =>
-                  r.availableTime !== undefined && r.availableTime !== null,
-              )
-              .sort(sortRec);
-            if (opRecs.length > 0) {
-              const latest = opRecs[opRecs.length - 1];
-              const filtered = opRecs.filter((r) => {
-                if (r.date < latest.date) return true;
-                if (
-                  r.date === latest.date &&
-                  String(r.shift || "1") <= String(latest.shift || "1")
-                )
-                  return true;
-                return false;
-              });
-              let totA = 0,
-                totO = 0;
-              filtered.forEach((r) => {
-                totA += parseFloat(r.availableTime) || 0;
-                totO += parseFloat(r.actualOperatingTime) || 0;
-              });
-              const rate = totA > 0 ? (totO / totA) * 100 : 0;
-              const agg = {};
-              processKeys.forEach((k) => {
-                agg[k] = 0;
-              });
-              filtered.forEach((r) => {
-                if (r.processStopTimes)
-                  processKeys.forEach((k) => {
-                    agg[k] += parseFloat(r.processStopTimes[k]) || 0;
-                  });
-              });
-              const procData = [];
-              const procLabels = [];
-              const procColors = [];
-              processKeys.forEach((k, i) => {
-                const v = agg[k] || 0;
-                if (v > 0) {
-                  procData.push(v);
-                  procLabels.push(processLabels[i]);
-                  procColors.push(processColors[i]);
-                }
-              });
-              const opLabels = [];
-              const opData = [];
-              filtered.forEach((r, i) => {
-                const d = new Date(r.date + "T00:00:00");
-                opLabels.push(`${d.getDate()}日-${r.shift || "1"}勤`);
-                const sub = filtered.slice(0, i + 1);
-                let sA = 0,
-                  sO = 0;
-                sub.forEach((x) => {
-                  sA += parseFloat(x.availableTime) || 0;
-                  sO += parseFloat(x.actualOperatingTime) || 0;
-                });
-                opData.push(sA > 0 ? (sO / sA) * 100 : 0);
-              });
-              summary.operating = {
-                latestDate: latest.date,
-                latestShift: latest.shift || "1",
-                cumulativeRate: parseFloat(rate.toFixed(2)),
-                totalOperatingMinutes: totO,
-                totalAvailableMinutes: totA,
-                trendData: { labels: opLabels, data: opData },
-                processStopChartData: {
-                  labels: procLabels,
-                  data: procData,
-                  colors: procColors,
-                },
-              };
-            }
-
-            safeSetItem(DASHBOARD_SUMMARY_KEY, JSON.stringify(summary));
-          } catch {}
-        }, []);
+        const updateDashboardSummary = useCallback(
+          async () => await rebuildDashboardSummary(),
+          [],
+        );
 
         useEffect(() => {
           if (session) updateDashboardSummary();
@@ -8374,16 +8378,25 @@
       function App() {
         // 初期フェーズ: 未初期化なら setup、初期化済みなら閲覧ダッシュボード、セッションありなら loading
         const [phase, setPhase] = useState(() => {
-          if (!UserManager.isInitialized()) return "setup";
-          // ページリロード後は暗号化キーが消えるためダッシュボード→ログインへ
-          if (!getSessionCryptoKey()) {
-            UserManager.logout();
-            return "dashboard";
-          }
-          // rawSession があれば HMAC 検証を非同期で行うため一時的に loading 状態にする
-          return UserManager.hasRawSession() ? "loading" : "dashboard";
+          // 公開用: 起動直後にダミーデータとダッシュボード集計を準備してから表示
+          return "public_loading";
         });
         const [session, setSession] = useState(null);
+
+        useEffect(() => {
+          if (phase !== "public_loading") return;
+          (async () => {
+            try {
+              await initSessionKey(PUBLIC_PASSPHRASE, PUBLIC_USER_ID);
+              await seedDummyData10DaysEnsure();
+              await rebuildDashboardSummary();
+              setPhase("dashboard");
+            } catch (e) {
+              console.error(e);
+              setPhase("dashboard");
+            }
+          })();
+        }, [phase]);
 
         // M-3: 起動時の HMAC 検証（loading フェーズ時のみ実行）
         useEffect(() => {
@@ -8422,7 +8435,7 @@
           setPhase("dashboard");
         };
 
-        if (phase === "loading") return null;
+        if (phase === "loading" || phase === "public_loading") return null;
 
         return React.createElement(
           React.Fragment,
