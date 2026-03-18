@@ -1,0 +1,2894 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在庫管理 TODO</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        :root {
+            --navy-900: #0a1628;
+            --navy-800: #111d35;
+            --navy-700: #172442;
+            --navy-600: #1e3055;
+            --navy-500: #263d68;
+            --navy-400: #3a5589;
+            --navy-300: #5a7ab5;
+            --navy-200: #8aaad8;
+            --navy-100: #c0d4ef;
+            --navy-50: #e8eff8;
+            --cyan-500: #06b6d4;
+            --cyan-400: #22d3ee;
+            --cyan-300: #67e8f9;
+            --cyan-200: #a5f3fc;
+            --cyan-100: #cffafe;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: var(--navy-900);
+            color: #e2e8f0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--navy-800); }
+        ::-webkit-scrollbar-thumb { background: var(--navy-500); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--navy-400); }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-16px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes pulse-cyan {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.3); }
+            50% { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); }
+        }
+        @keyframes shelfSlide {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        .animate-slideDown { animation: slideDown 0.3s ease-out; }
+        .animate-shelf { animation: shelfSlide 0.4s ease-out; }
+
+        @keyframes toastSlideIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.96); }
+            to   { opacity: 1; transform: translateX(-50%) translateY(0)       scale(1);    }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; }
+            to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+        }
+
+        .permission-toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(239, 68, 68, 0.18);
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            color: #f87171;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            z-index: 9999;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+            white-space: nowrap;
+            pointer-events: none;
+            animation: toastSlideIn 0.25s ease-out;
+        }
+        .permission-toast.hiding {
+            animation: toastFadeOut 0.3s ease-in forwards;
+        }
+
+        /* App Container */
+        #root {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 24px;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 22, 40, 0.85);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .modal-content {
+            background: var(--navy-800);
+            border: 1px solid var(--navy-600);
+            border-radius: 16px;
+            padding: 32px;
+            width: 560px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideDown 0.3s ease-out;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+        }
+
+        /* Table */
+        .task-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .task-table thead th {
+            background: var(--navy-800);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--navy-300);
+            border-bottom: 2px solid var(--navy-600);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .task-table thead th:first-child { border-radius: 8px 0 0 0; }
+        .task-table thead th:last-child { border-radius: 0 8px 0 0; }
+
+        .task-table tbody tr {
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .task-table tbody tr:hover {
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .task-table tbody tr:hover td {
+            border-color: rgba(6, 182, 212, 0.15);
+        }
+
+        .task-table tbody td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--navy-700);
+            font-size: 14px;
+            vertical-align: middle;
+            transition: all 0.15s ease;
+        }
+
+        .task-table tbody tr.completed td {
+            opacity: 0.45;
+            text-decoration: line-through;
+            text-decoration-color: var(--navy-400);
+        }
+
+        /* Checkbox */
+        .custom-checkbox {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .custom-checkbox input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .custom-checkbox .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--navy-400);
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .custom-checkbox input:checked ~ .checkmark {
+            background: var(--cyan-500);
+            border-color: var(--cyan-500);
+        }
+
+        .custom-checkbox input:checked ~ .checkmark svg {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .custom-checkbox .checkmark svg {
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.2s ease;
+        }
+
+        .custom-checkbox:hover .checkmark {
+            border-color: var(--cyan-400);
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .badge-instock { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .badge-instock .badge-dot { background: #10b981; }
+        .badge-lowstock { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .badge-lowstock .badge-dot { background: #f59e0b; }
+        .badge-outofstock { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+        .badge-outofstock .badge-dot { background: #ef4444; }
+        .badge-ordered { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .badge-ordered .badge-dot { background: #3b82f6; }
+
+        /* Priority */
+        .priority-high { color: #f87171; }
+        .priority-medium { color: #fbbf24; }
+        .priority-low { color: var(--navy-300); }
+
+        /* Tooltip (Comment Popup) */
+        .tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: rgba(15, 23, 42, 0.98);
+            color: #e2e8f0;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-width: 300px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(6, 182, 212, 0.3);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 1000;
+            line-height: 1.5;
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(15, 23, 42, 0.98);
+        }
+
+        .tooltip-wrapper:hover .tooltip {
+            opacity: 1;
+        }
+
+        /* Input */
+        .input-field {
+            background: var(--navy-700);
+            border: 1px solid var(--navy-500);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #e2e8f0;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 14px;
+            width: 100%;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--cyan-500);
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+        }
+
+        .input-field::placeholder {
+            color: var(--navy-400);
+        }
+
+        select.input-field {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235a7ab5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        /* Date input styling */
+        input[type="date"].input-field {
+            position: relative;
+            color-scheme: dark;
+        }
+
+        input[type="date"].input-field::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(0.7) sepia(1) saturate(5) hue-rotate(175deg);
+            opacity: 0.8;
+            padding: 4px;
+            transition: all 0.2s ease;
+        }
+
+        input[type="date"].input-field::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+            filter: invert(0.8) sepia(1) saturate(5) hue-rotate(175deg);
+            transform: scale(1.1);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
+            outline: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyan-500), #0891b2);
+            color: white;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(6, 182, 212, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--navy-600);
+            color: var(--navy-200);
+            border: 1px solid var(--navy-500);
+        }
+        .btn-secondary:hover {
+            background: var(--navy-500);
+            color: #e2e8f0;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--navy-300);
+            padding: 8px 12px;
+        }
+        .btn-ghost:hover { background: var(--navy-700); color: #e2e8f0; }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+        /* Filter buttons */
+        .filter-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--navy-600);
+            background: var(--navy-800);
+            color: var(--navy-300);
+        }
+        .filter-btn:hover { border-color: var(--navy-400); color: #e2e8f0; }
+        .filter-btn.active {
+            background: rgba(6, 182, 212, 0.12);
+            border-color: var(--cyan-500);
+            color: var(--cyan-400);
+        }
+
+        .filter-count {
+            background: var(--navy-600);
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+        .filter-btn.active .filter-count {
+            background: rgba(6, 182, 212, 0.2);
+        }
+
+        /* Mono text */
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Sortable header */
+        .sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sortable:hover {
+            color: var(--cyan-400);
+        }
+
+        /* Tooltip */
+        .action-btn {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            border: none;
+            background: transparent;
+            color: var(--navy-400);
+        }
+        .action-btn:hover {
+            background: var(--navy-600);
+            color: #e2e8f0;
+        }
+        .action-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        /* Stats card */
+        .stat-card {
+            background: var(--navy-800);
+            border: 1px solid var(--navy-700);
+            border-radius: 12px;
+            padding: 16px 20px;
+            transition: all 0.2s ease;
+        }
+        .stat-card:hover {
+            border-color: var(--navy-500);
+            transform: translateY(-2px);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--navy-400);
+        }
+
+        /* Date near/overdue */
+        .date-overdue { color: #f87171; font-weight: 600; }
+        .date-soon { color: #fbbf24; }
+        .date-normal { color: var(--navy-300); }
+
+        /* Outgoing active filter */
+        .filter-btn.active-out {
+            background: rgba(245, 158, 11, 0.12) !important;
+            border-color: #f59e0b !important;
+            color: #fbbf24 !important;
+        }
+        .filter-btn.active-out .filter-count {
+            background: rgba(245, 158, 11, 0.2) !important;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--navy-300);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        /*
+        // ============================
+        // Authentication & User Management
+        // ============================
+        const AUTH_STORAGE_KEY = 'inventory_auth_users';
+        const SESSION_STORAGE_KEY = 'inventory_current_session';
+        const SESSION_EXPIRY_KEY = 'inventory_session_expiry';
+        const MASTER_KEY = 'inventory_master_key_initialized';
+        const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4時間（機密性を考慮して短めに設定）
+
+        // アカウントロック設定
+        const LOGIN_ATTEMPTS_KEY  = 'inventory_login_attempts';
+        const MAX_FAIL_ATTEMPTS   = 5;                  // 連続失敗の上限回数
+        const LOCK_DURATION_MS    = 3 * 60 * 1000;     // ロック継続時間: 3分
+
+        // パスワードのハッシュ化（SHA-256）
+        const hashPassword = async (password) => {
+            if (password == null) password = '';
+            const encoder = new TextEncoder();
+            const data = encoder.encode(String(password));
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const arr = new Uint8Array(hashBuffer);
+            const hashArray = Array.from(arr);
+            const parts = [];
+            for (let i = 0; i < hashArray.length; i++) {
+                const b = hashArray[i];
+                const n = (b != null && !isNaN(Number(b))) ? Number(b) : 0;
+                parts.push(n.toString(16).padStart(2, '0'));
+            }
+            return parts.join('');
+        };
+
+        // ============================
+        // アカウントロック管理（LocalStorage ベース）
+        // ============================
+        const LoginAttemptManager = {
+            _getStore: () => {
+                try {
+                    const raw = localStorage.getItem(LOGIN_ATTEMPTS_KEY);
+                    if (!raw) return {};
+                    const p = JSON.parse(raw);
+                    return (p && typeof p === 'object') ? p : {};
+                } catch { return {}; }
+            },
+            _saveStore: (store) => {
+                try { localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(store)); } catch {}
+            },
+
+            // ロック中かどうかを判定（ロック期間が過ぎていれば自動解除）
+            isLocked: (userId) => {
+                if (!userId) return false;
+                const store = LoginAttemptManager._getStore();
+                const entry = store[String(userId)];
+                if (!entry || entry.count < MAX_FAIL_ATTEMPTS) return false;
+                if (Date.now() - entry.lockedAt >= LOCK_DURATION_MS) {
+                    LoginAttemptManager.clearAttempts(userId); // 期限切れ → 自動解除
+                    return false;
+                }
+                return true;
+            },
+
+            // ロック解除までの残り時間(ms)
+            getRemainingLockMs: (userId) => {
+                const store = LoginAttemptManager._getStore();
+                const entry = store[String(userId)];
+                if (!entry || entry.count < MAX_FAIL_ATTEMPTS) return 0;
+                return Math.max(0, LOCK_DURATION_MS - (Date.now() - entry.lockedAt));
+            },
+
+            // ログイン失敗を記録（上限に達した時刻を保存）
+            recordFailure: (userId) => {
+                if (!userId) return;
+                const store = LoginAttemptManager._getStore();
+                const uid   = String(userId);
+                const entry = store[uid] || { count: 0, lockedAt: null };
+                entry.count += 1;
+                if (entry.count >= MAX_FAIL_ATTEMPTS) entry.lockedAt = Date.now();
+                store[uid] = entry;
+                LoginAttemptManager._saveStore(store);
+            },
+
+            // ログイン成功時に失敗カウントをリセット
+            clearAttempts: (userId) => {
+                if (!userId) return;
+                const store = LoginAttemptManager._getStore();
+                delete store[String(userId)];
+                LoginAttemptManager._saveStore(store);
+            },
+
+            // 残り失敗許容回数
+            getRemainingAttempts: (userId) => {
+                const store  = LoginAttemptManager._getStore();
+                const entry  = store[String(userId)];
+                const count  = entry ? entry.count : 0;
+                return Math.max(0, MAX_FAIL_ATTEMPTS - count);
+            }
+        };
+
+        // ============================
+        // パスワードポリシーバリデーション
+        // ============================
+        const validatePasswordPolicy = (password) => {
+            if (!password || typeof password !== 'string') {
+                return { valid: false, error: 'パスワードを入力してください' };
+            }
+            if (password.length < 8) {
+                return { valid: false, error: 'パスワードは8文字以上で設定してください' };
+            }
+            if (!/[a-zA-Z]/.test(password)) {
+                return { valid: false, error: 'パスワードには英字（a-z / A-Z）を1文字以上含めてください' };
+            }
+            if (!/[0-9]/.test(password)) {
+                return { valid: false, error: 'パスワードには数字（0-9）を1文字以上含めてください' };
+            }
+            return { valid: true, error: null };
+        };
+
+        // ============================
+        // ユーザー管理クラス
+        const UserManager = {
+            // 初期管理者アカウントの作成
+            initializeMasterAccount: async (userId, password) => {
+                if (userId == null || typeof userId !== 'string' || !userId.trim()) {
+                    throw new Error('ユーザーIDが指定されていません');
+                }
+                const initPolicyCheck = validatePasswordPolicy(password);
+                if (!initPolicyCheck.valid) throw new Error(initPolicyCheck.error);
+                const hashedPassword = await hashPassword(password);
+                const users = [{
+                    id: String(userId).trim(),
+                    passwordHash: hashedPassword,
+                    role: 'admin',
+                    createdAt: new Date().toISOString(),
+                    isActive: true
+                }];
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(users));
+                localStorage.setItem(MASTER_KEY, 'true');
+                return true;
+            },
+
+            // ユーザー一覧取得（LocalStorageが空や不正な場合は空配列を返す）
+            getUsers: () => {
+                try {
+                    const data = localStorage.getItem(AUTH_STORAGE_KEY);
+                    if (!data || data === 'null' || data === 'undefined') return [];
+                    const parsed = JSON.parse(data);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                    return [];
+                }
+            },
+
+            // ユーザー認証（アカウントロックチェック付き）
+            authenticate: async (userId, password) => {
+                const uid = String(userId || '').trim();
+
+                // ロック中はエラーをスロー（残り時間を秒で表示）
+                if (LoginAttemptManager.isLocked(uid)) {
+                    const remainSec = Math.ceil(LoginAttemptManager.getRemainingLockMs(uid) / 1000);
+                    throw new Error(`ログイン試行回数の上限（${MAX_FAIL_ATTEMPTS}回）に達しました。${remainSec}秒後に再試行してください。`);
+                }
+
+                const users = UserManager.getUsers();
+                const user  = users.find(u => u.id === uid && u.isActive);
+
+                // ユーザーが存在しない場合も失敗としてカウント（列挙攻撃対策）
+                if (!user) {
+                    LoginAttemptManager.recordFailure(uid);
+                    return null;
+                }
+
+                const hashedPassword = await hashPassword(password);
+                if (user.passwordHash === hashedPassword) {
+                    // 認証成功：失敗カウントをリセット
+                    LoginAttemptManager.clearAttempts(uid);
+                    const session = {
+                        userId: user.id,
+                        role: user.role,
+                        loginTime: new Date().toISOString()
+                    };
+                    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+                    const expiry = Date.now() + SESSION_TIMEOUT_MS;
+                    sessionStorage.setItem(SESSION_EXPIRY_KEY, String(expiry));
+                    return session;
+                }
+
+                // 認証失敗：失敗カウントを記録
+                LoginAttemptManager.recordFailure(uid);
+                const remaining = LoginAttemptManager.getRemainingAttempts(uid);
+                if (remaining === 0) {
+                    const lockSec = Math.ceil(LOCK_DURATION_MS / 1000);
+                    throw new Error(`ログイン試行回数の上限（${MAX_FAIL_ATTEMPTS}回）に達しました。${lockSec}秒間ロックされます。`);
+                }
+                return null;
+            },
+
+            // セッション取得（有効期限チェック付き・リロード後も維持）
+            getSession: () => {
+                try {
+                    const expiryStr = sessionStorage.getItem(SESSION_EXPIRY_KEY);
+                    if (expiryStr && Date.now() > parseInt(expiryStr, 10)) {
+                        UserManager.logout();
+                        return null;
+                    }
+                    const data = sessionStorage.getItem(SESSION_STORAGE_KEY);
+                    return data ? JSON.parse(data) : null;
+                } catch {
+                    return null;
+                }
+            },
+
+            // ログアウト（セッション・有効期限・暗号化キーを全てクリア）
+            logout: () => {
+                sessionStorage.removeItem(SESSION_STORAGE_KEY);
+                sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+                SecureStorage.clearKey();
+            },
+
+            // ユーザー追加（管理者のみ・権限チェック）
+            addUser: async (userId, password, role = 'user') => {
+                const session = UserManager.getSession();
+                if (!session || session.role !== 'admin') {
+                    throw new Error('この操作には管理者権限が必要です');
+                }
+                const addPolicyCheck = validatePasswordPolicy(password);
+                if (!addPolicyCheck.valid) throw new Error(addPolicyCheck.error);
+
+                const users = UserManager.getUsers();
+                if (users.find(u => u.id === userId)) {
+                    throw new Error('このユーザーIDは既に使用されています');
+                }
+
+                const hashedPassword = await hashPassword(password);
+                users.push({
+                    id: userId,
+                    passwordHash: hashedPassword,
+                    role: role,
+                    createdAt: new Date().toISOString(),
+                    isActive: true
+                });
+
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(users));
+                SecureStorage.addUserToKeyRegistry(userId, password);
+                return true;
+            },
+
+            // ユーザー削除（管理者のみ・権限チェック）
+            deleteUser: (userId) => {
+                const session = UserManager.getSession();
+                if (!session || session.role !== 'admin') {
+                    throw new Error('この操作には管理者権限が必要です');
+                }
+                const users = UserManager.getUsers();
+                const filtered = users.filter(u => u.id !== userId);
+                
+                if (filtered.length === users.length) {
+                    throw new Error('ユーザーが見つかりません');
+                }
+
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(filtered));
+                SecureStorage.removeUserFromKeyRegistry(userId);
+                return true;
+            },
+
+            // パスワード変更
+            changePassword: async (userId, oldPassword, newPassword) => {
+                const users = UserManager.getUsers();
+                const userIndex = users.findIndex(u => u.id === userId);
+                
+                if (userIndex === -1) {
+                    throw new Error('ユーザーが見つかりません');
+                }
+
+                const oldHash = await hashPassword(oldPassword);
+                if (users[userIndex].passwordHash !== oldHash) {
+                    throw new Error('現在のパスワードが正しくありません');
+                }
+
+                const newHash = await hashPassword(newPassword);
+                users[userIndex].passwordHash = newHash;
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(users));
+                return true;
+            },
+
+            // 初期化済みチェック
+            isInitialized: () => {
+                return localStorage.getItem(MASTER_KEY) === 'true';
+            }
+        };
+
+        // ============================
+        // 暗号化ストレージ（CryptoJS）
+        // 秘密鍵はコード内に持たず、ログインパスワードから導出する
+        // ============================
+        const ENCRYPTION_KEY_STORAGE_KEY = 'inventory_session_encryption_key'; // セッション中のみ
+        const KEY_REGISTRY_STORAGE_KEY = 'inventory_key_registry'; // マスター鍵を各ユーザーごとに暗号化して保存
+
+        // KDF バージョン識別子
+        // レジストリエントリに kdfVersion フィールドがない場合は旧方式（後方互換）
+        const KDF_V1_LEGACY   = 'v1-sha256-concat';       // 旧: SHA256(password + salt) 1回
+        const KDF_V2_PBKDF2   = 'v2-pbkdf2-sha256-100k';  // 新: PBKDF2-SHA256, 100,000 iterations, 256-bit
+
+        // PBKDF2 パラメータ（OWASP 推奨準拠）
+        const PBKDF2_ITERATIONS = 100000;   // 反復回数: 100,000回（ブルートフォース耐性の基準値）
+        const PBKDF2_KEY_SIZE   = 8;        // 鍵長: 8 × 32-bit word = 256 bit（AES-256に最適）
+
+        // ネイティブAPIでランダムバイトを生成（CryptoJS.lib.WordArray.random の互換性問題を回避）
+        const generateRandomHex = (byteLength) => {
+            const len = Math.max(1, Math.floor(Number(byteLength) || 16));
+            const arr = new Uint8Array(len);
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                crypto.getRandomValues(arr);
+            } else {
+                for (let i = 0; i < len; i++) arr[i] = Math.floor(Math.random() * 256);
+            }
+            const result = Array.from(arr).map(function(b) {
+                const n = Number(b);
+                return (isNaN(n) ? 0 : n).toString(16).padStart(2, '0');
+            }).join('');
+            return typeof result === 'string' ? result : '';
+        };
+
+        const SecureStorage = {
+            // パスワードとソルトから AES 用キーマテリアルを導出
+            // kdfVersion を省略または KDF_V1_LEGACY を渡すと旧 SHA-256 方式（後方互換）
+            // KDF_V2_PBKDF2 を渡すと PBKDF2-SHA256 / 100,000 iterations / 256-bit（推奨）
+            // 戻り値: Hex 文字列（CryptoJS パスフレーズモードに渡す）
+            _deriveKey: (password, saltHex, kdfVersion) => {
+                if (password == null || typeof password !== 'string') {
+                    throw new Error('パスワードが指定されていません');
+                }
+                if (typeof CryptoJS === 'undefined' || !CryptoJS.PBKDF2 || !CryptoJS.SHA256) {
+                    throw new Error('CryptoJSの初期化に失敗しました');
+                }
+
+                try {
+                    if (kdfVersion === KDF_V2_PBKDF2) {
+                        // ── 新方式: PBKDF2-SHA256（OWASP 推奨準拠） ──────────────────
+                        // ソルトを WordArray に変換して CryptoJS に渡す
+                        const saltWordArray = CryptoJS.enc.Hex.parse(
+                            (saltHex && typeof saltHex === 'string' && saltHex.length >= 2)
+                                ? saltHex
+                                : generateRandomHex(16)  // フォールバック（通常は到達しない）
+                        );
+                        const key = CryptoJS.PBKDF2(String(password), saltWordArray, {
+                            keySize   : PBKDF2_KEY_SIZE,            // 256-bit
+                            iterations: PBKDF2_ITERATIONS,          // 100,000 回
+                            hasher    : CryptoJS.algo.SHA256         // SHA-256 を明示指定
+                        });
+                        const out = key.toString(CryptoJS.enc.Hex);
+                        if (!out) throw new Error('PBKDF2 の出力が空です');
+                        return out;
+
+                    } else {
+                        // ── 旧方式: SHA256(password + salt) 1回（後方互換のみ） ──────
+                        const saltStr = (saltHex && typeof saltHex === 'string' && saltHex.length > 0)
+                            ? saltHex : 'inventory_kdf_salt_v1';
+                        const hash = CryptoJS.SHA256(String(password) + saltStr);
+                        const out = hash && typeof hash.toString === 'function'
+                            ? hash.toString(CryptoJS.enc.Hex) : '';
+                        return (out && typeof out === 'string') ? out : '';
+                    }
+
+                } catch (e) {
+                    throw new Error('鍵導出に失敗しました: ' + (e && e.message ? e.message : String(e)));
+                }
+            },
+
+            // 初回セットアップ：マスター鍵を生成し、指定ユーザーのパスワードで暗号化して保存
+            // CryptoJS.enc.Hex.parse を使わず、文字列パスフレーズモードで暗号化（[0]エラー回避）
+            initMasterKeyForUser: (userId, password) => {
+                if (userId == null || typeof userId !== 'string' || !String(userId).trim()) {
+                    throw new Error('ユーザーIDが指定されていません');
+                }
+                if (password == null || typeof password !== 'string' || String(password).length < 6) {
+                    throw new Error('パスワードは6文字以上で指定してください');
+                }
+                if (typeof CryptoJS === 'undefined' || !CryptoJS.AES) {
+                    throw new Error('CryptoJSライブラリの読み込みに失敗しています');
+                }
+                const masterKey = generateRandomHex(32);
+                const salt = generateRandomHex(16);  // ユーザー登録時に1回だけ生成し、LocalStorageに永続化
+                if (!masterKey || !salt) throw new Error('ランダム鍵の生成に失敗しました');
+                // PBKDF2-SHA256 / 100,000 iterations で鍵導出
+                const userKey = SecureStorage._deriveKey(password, salt, KDF_V2_PBKDF2);
+                if (!userKey) throw new Error('鍵導出に失敗しました');
+                const encrypted = CryptoJS.AES.encrypt(masterKey, userKey).toString();
+                const registryRaw = localStorage.getItem(KEY_REGISTRY_STORAGE_KEY);
+                const registry = (registryRaw && registryRaw !== 'null') ? (() => {
+                    try {
+                        const p = JSON.parse(registryRaw);
+                        return p && typeof p === 'object' ? p : {};
+                    } catch { return {}; }
+                })() : {};
+                // ソルト + KDF バージョンを永続化（ログイン時に同一パラメータで再導出するため必須）
+                const key = String(userId).trim();
+                registry[key] = { salt, encrypted, kdfVersion: KDF_V2_PBKDF2 };
+                localStorage.setItem(KEY_REGISTRY_STORAGE_KEY, JSON.stringify(registry));
+                sessionStorage.setItem(ENCRYPTION_KEY_STORAGE_KEY, masterKey);
+            },
+
+            // ログイン時：ID→LocalStorageからソルト取得→パスワードとソルトで鍵生成→マスター鍵復号
+            // ※新しいソルトは生成せず、必ず保存済みのソルトを使用する
+            unlockMasterKey: (userId, password) => {
+                if (userId == null || password == null) return false;
+                const uid = String(userId).trim();
+                const pwd = String(password);
+                if (!uid || !pwd) return false;
+
+                // 1. LocalStorageから鍵レジストリを取得
+                const registryRaw = localStorage.getItem(KEY_REGISTRY_STORAGE_KEY);
+                if (!registryRaw || registryRaw === 'null') return false;
+                let registry = {};
+                try {
+                    const p = JSON.parse(registryRaw);
+                    registry = p && typeof p === 'object' ? p : {};
+                } catch { return false; }
+
+                // 2. 入力IDに対応するユーザー固有のエントリ（ソルト・KDFバージョン含む）を取り出す
+                const entry = registry[uid];
+                if (!entry) return false;
+                const storedSalt      = entry.salt;
+                const storedEncrypted = entry.encrypted;
+                // kdfVersion が未設定（旧データ）は KDF_V1_LEGACY として扱う
+                const storedKdfVersion = entry.kdfVersion || KDF_V1_LEGACY;
+                if (!storedSalt || !storedEncrypted) return false;
+
+                // 3. 保存済みソルト＋バージョンで鍵を導出（generateRandomHex は呼ばない）
+                let userKey;
+                try {
+                    userKey = SecureStorage._deriveKey(pwd, storedSalt, storedKdfVersion);
+                } catch { return false; }
+                if (!userKey) return false;
+
+                // 4. 導出した鍵でマスター鍵を復号
+                let masterHex;
+                try {
+                    const bytes = CryptoJS.AES.decrypt(storedEncrypted, userKey);
+                    masterHex = bytes && typeof bytes.toString === 'function'
+                        ? bytes.toString(CryptoJS.enc.Utf8) : '';
+                    if (!masterHex) return false;
+                    sessionStorage.setItem(ENCRYPTION_KEY_STORAGE_KEY, masterHex);
+                } catch { return false; }
+
+                // 5. 旧方式（KDF_V1_LEGACY）のエントリを PBKDF2 に透過的マイグレーション
+                //    ログイン成功時に一度だけ実行（次回ログイン以降は新方式が使われる）
+                if (storedKdfVersion === KDF_V1_LEGACY) {
+                    try {
+                        const newSalt    = generateRandomHex(16);
+                        const newUserKey = SecureStorage._deriveKey(pwd, newSalt, KDF_V2_PBKDF2);
+                        const newEncrypted = CryptoJS.AES.encrypt(masterHex, newUserKey).toString();
+                        const latestRaw  = localStorage.getItem(KEY_REGISTRY_STORAGE_KEY);
+                        const latestReg  = latestRaw ? JSON.parse(latestRaw) : {};
+                        latestReg[uid]   = { salt: newSalt, encrypted: newEncrypted, kdfVersion: KDF_V2_PBKDF2 };
+                        localStorage.setItem(KEY_REGISTRY_STORAGE_KEY, JSON.stringify(latestReg));
+                    } catch {
+                        // マイグレーション失敗でもログイン自体は継続（次回ログイン時に再試行）
+                    }
+                }
+
+                return true;
+            },
+
+            // 新規ユーザー追加時：既存のマスター鍵を新規ユーザーのパスワードで暗号化して登録
+            addUserToKeyRegistry: (userId, password) => {
+                const masterHex = sessionStorage.getItem(ENCRYPTION_KEY_STORAGE_KEY);
+                if (!masterHex || userId == null || password == null) return false;
+                const salt    = generateRandomHex(16);
+                // 新規ユーザーは常に PBKDF2 を使用
+                const userKey = SecureStorage._deriveKey(String(password), salt, KDF_V2_PBKDF2);
+                const encrypted = CryptoJS.AES.encrypt(masterHex, userKey).toString();
+                const registryRaw = localStorage.getItem(KEY_REGISTRY_STORAGE_KEY);
+                let registry = {};
+                try {
+                    if (registryRaw && registryRaw !== 'null') {
+                        const p = JSON.parse(registryRaw);
+                        registry = p && typeof p === 'object' ? p : {};
+                    }
+                } catch {}
+                registry[String(userId)] = { salt, encrypted, kdfVersion: KDF_V2_PBKDF2 };
+                localStorage.setItem(KEY_REGISTRY_STORAGE_KEY, JSON.stringify(registry));
+                return true;
+            },
+
+            removeUserFromKeyRegistry: (userId) => {
+                const registryRaw = localStorage.getItem(KEY_REGISTRY_STORAGE_KEY);
+                let registry = {};
+                try {
+                    if (registryRaw && registryRaw !== 'null') {
+                        const p = JSON.parse(registryRaw);
+                        registry = p && typeof p === 'object' ? p : {};
+                    }
+                } catch {}
+                delete registry[userId];
+                localStorage.setItem(KEY_REGISTRY_STORAGE_KEY, JSON.stringify(registry));
+            },
+
+            clearKey: () => {
+                sessionStorage.removeItem(ENCRYPTION_KEY_STORAGE_KEY);
+            },
+
+            _getMasterKey: () => sessionStorage.getItem(ENCRYPTION_KEY_STORAGE_KEY),
+
+            encrypt: (plaintext) => {
+                const masterHex = SecureStorage._getMasterKey();
+                if (!masterHex) throw new Error('暗号化鍵が設定されていません。再ログインしてください。');
+                try {
+                    return CryptoJS.AES.encrypt(plaintext, masterHex).toString();
+                } catch (e) { throw e; }
+            },
+            decrypt: (ciphertext) => {
+                const masterHex = SecureStorage._getMasterKey();
+                if (!masterHex) return null;
+                try {
+                    const bytes = CryptoJS.AES.decrypt(ciphertext, masterHex);
+                    const str = bytes && bytes.toString ? bytes.toString(CryptoJS.enc.Utf8) : '';
+                    return str || null;
+                } catch { return null; }
+            },
+            isEncrypted: (str) => str && typeof str === 'string' && str.length > 0 && !str.startsWith('[') && !str.startsWith('{')
+        };
+
+        // ============================
+        // 権限チェック用ヘルパー
+        // ============================
+        const canEdit = (role) => role === 'admin' || role === 'user';
+        const canManageUsers = (role) => role === 'admin';
+        const getRoleLabel = (role) => {
+            if (role === 'admin') return '管理者';
+            if (role === 'user') return '編集可';
+            if (role === 'guest') return '閲覧のみ';
+            return role || '不明';
+        };
+
+        // ============================
+        // セッション整合性検証・権限アサーション
+        // ============================
+
+        // SessionStorageの内容をLocalStorageのユーザーDBと毎回照合し、
+        // セッション改ざん・ユーザー削除・ロール変更を検出する
+        const getVerifiedSession = () => {
+            try {
+                const expiryStr = sessionStorage.getItem(SESSION_EXPIRY_KEY);
+                if (!expiryStr || Date.now() > parseInt(expiryStr, 10)) {
+                    UserManager.logout();
+                    return null;
+                }
+                const sessionData = sessionStorage.getItem(SESSION_STORAGE_KEY);
+                if (!sessionData) return null;
+                const session = JSON.parse(sessionData);
+                if (!session || typeof session.userId !== 'string' || typeof session.role !== 'string') return null;
+
+                // LocalStorageのユーザーDBとの照合（削除・無効化・ロール変更を検出）
+                const users = UserManager.getUsers();
+                const dbUser = users.find(u => u.id === session.userId && u.isActive);
+                if (!dbUser) return null;
+                if (dbUser.role !== session.role) return null;
+
+                return session;
+            } catch {
+                return null;
+            }
+        };
+
+        // データ編集権限アサーション（guest・未ログイン・セッション不正で例外を投げる）
+        const assertCanEdit = () => {
+            const session = getVerifiedSession();
+            if (!session) throw new Error('[権限エラー] セッションが無効です。再ログインしてください。');
+            if (!canEdit(session.role)) throw new Error(`[権限エラー] ロール「${getRoleLabel(session.role)}」にはデータ編集権限がありません。`);
+            return session;
+        };
+
+        // 管理者専用操作アサーション（admin以外で例外を投げる）
+        const assertCanAdmin = () => {
+            const session = getVerifiedSession();
+            if (!session) throw new Error('[権限エラー] セッションが無効です。再ログインしてください。');
+            if (!canManageUsers(session.role)) throw new Error(`[権限エラー] ロール「${getRoleLabel(session.role)}」には管理者権限がありません。`);
+            return session;
+        };
+
+        */
+
+        const canEdit = () => true;
+
+        // ============================
+        // SVG Icon Components
+        // ============================
+        const IconShelf = ({ size = 24, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <rect x="5.5" y="4.5" width="3.5" height="3.5" rx="0.5" fill={color} opacity="0.2" />
+                <rect x="10.5" y="4.5" width="5" height="3.5" rx="0.5" fill={color} opacity="0.15" />
+                <rect x="6" y="10.5" width="4" height="3.5" rx="0.5" fill={color} opacity="0.2" />
+                <rect x="14" y="10.5" width="4.5" height="3.5" rx="0.5" fill={color} opacity="0.15" />
+                <rect x="5" y="16.5" width="5.5" height="3.5" rx="0.5" fill={color} opacity="0.2" />
+                <rect x="12" y="16.5" width="3" height="3.5" rx="0.5" fill={color} opacity="0.15" />
+            </svg>
+        );
+
+        const IconSearch = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+        );
+
+        const IconPlus = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+        );
+
+        const IconCheck = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+            </svg>
+        );
+
+        const IconX = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+        );
+
+        const IconTrash = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+        );
+
+        const IconEdit = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+        );
+
+        const IconPackage = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+        );
+
+        const IconFilter = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+        );
+
+        const IconChevronDown = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+            </svg>
+        );
+
+        const IconChevronUp = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+            </svg>
+        );
+
+        const IconCalendar = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+        );
+
+        const IconUser = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+            </svg>
+        );
+
+        const IconAlertTriangle = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+        );
+
+        const IconArrowUpDown = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m7 15 5 5 5-5" />
+                <path d="m7 9 5-5 5 5" />
+            </svg>
+        );
+
+        const IconHash = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="9" x2="20" y2="9" />
+                <line x1="4" y1="15" x2="20" y2="15" />
+                <line x1="10" y1="3" x2="8" y2="21" />
+                <line x1="16" y1="3" x2="14" y2="21" />
+            </svg>
+        );
+
+        const IconDollar = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+        );
+
+        const IconTruck = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="3" width="15" height="13" />
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                <circle cx="5.5" cy="18.5" r="2.5" />
+                <circle cx="18.5" cy="18.5" r="2.5" />
+            </svg>
+        );
+
+        const IconLogOut = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+        );
+
+        const IconLogIn = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" y1="12" x2="3" y2="12" />
+            </svg>
+        );
+
+        const IconSave = ({ size = 16, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+            </svg>
+        );
+
+        const IconClock = ({ size = 14, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+            </svg>
+        );
+
+        const IconClipboard = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+            </svg>
+        );
+
+        const IconBoxes = ({ size = 18, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="8" height="8" rx="1.5" />
+                <rect x="14" y="3" width="8" height="8" rx="1.5" />
+                <rect x="2" y="13" width="8" height="8" rx="1.5" />
+                <rect x="14" y="13" width="8" height="8" rx="1.5" />
+                <line x1="6" y1="5" x2="6" y2="9" opacity="0.4" />
+                <line x1="18" y1="5" x2="18" y2="9" opacity="0.4" />
+                <line x1="6" y1="15" x2="6" y2="19" opacity="0.4" />
+                <line x1="18" y1="15" x2="18" y2="19" opacity="0.4" />
+            </svg>
+        );
+
+        const IconStar = ({ size = 14, filled = false, color = "currentColor" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : "none"} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+        );
+
+        // ============================
+        // App Logo Component
+        // ============================
+        const AppLogo = () => (
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#logoGrad)" />
+                <defs>
+                    <linearGradient id="logoGrad" x1="2" y1="2" x2="38" y2="38" gradientUnits="userSpaceOnUse">
+                        <stop stopColor="#06b6d4" />
+                        <stop offset="1" stopColor="#0891b2" />
+                    </linearGradient>
+                </defs>
+                {/* Shelf lines */}
+                <line x1="8" y1="14" x2="32" y2="14" stroke="white" strokeWidth="1.5" opacity="0.7" />
+                <line x1="8" y1="22" x2="32" y2="22" stroke="white" strokeWidth="1.5" opacity="0.7" />
+                <line x1="8" y1="30" x2="32" y2="30" stroke="white" strokeWidth="1.5" opacity="0.7" />
+                {/* Boxes on shelves */}
+                <rect x="10" y="8" width="6" height="5" rx="1" fill="white" opacity="0.9" />
+                <rect x="18" y="9" width="8" height="4" rx="1" fill="white" opacity="0.6" />
+                <rect x="12" y="16" width="7" height="5" rx="1" fill="white" opacity="0.7" />
+                <rect x="22" y="16" width="5" height="5" rx="1" fill="white" opacity="0.9" />
+                <rect x="10" y="24" width="5" height="5" rx="1" fill="white" opacity="0.8" />
+                <rect x="17" y="24" width="9" height="5" rx="1" fill="white" opacity="0.6" />
+                {/* Check mark */}
+                <circle cx="31" cy="9" r="5" fill="white" />
+                <polyline points="28.5,9 30,10.5 33.5,7" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+        );
+
+        // ============================
+        // Constants
+        // ============================
+        const STATUSES = [
+            { value: 'instock', label: '在庫あり', class: 'badge-instock' },
+            { value: 'lowstock', label: '残少', class: 'badge-lowstock' },
+            { value: 'outofstock', label: '欠品', class: 'badge-outofstock' },
+            { value: 'ordered', label: '発注済', class: 'badge-ordered' },
+        ];
+
+        const PRIORITIES = [
+            { value: 'high', label: '高', class: 'priority-high' },
+            { value: 'medium', label: '中', class: 'priority-medium' },
+            { value: 'low', label: '低', class: 'priority-low' },
+        ];
+
+        // ============================
+        // Utility Functions
+        // ============================
+        const getDateClass = (dateStr) => {
+            if (!dateStr) return 'date-normal';
+            const diff = (new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24);
+            if (diff < 0) return 'date-overdue';
+            if (diff <= 3) return 'date-soon';
+            return 'date-normal';
+        };
+
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            const diff = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
+            let suffix = '';
+            if (diff < 0) suffix = ` (${Math.abs(diff)}日超過)`;
+            else if (diff === 0) suffix = ' (本日)';
+            else if (diff <= 3) suffix = ` (あと${diff}日)`;
+            return `${m}/${day}${suffix}`;
+        };
+
+        const formatOutgoingDate = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const targetDate = new Date(d);
+            targetDate.setHours(0, 0, 0, 0);
+            const diff = Math.ceil((targetDate - today) / (1000 * 60 * 60 * 24));
+            
+            if (diff === 0) return `${m}/${day} (本日)`;
+            if (diff < 0) return `${m}/${day} (${Math.abs(diff)}日前)`;
+            if (diff > 0) return `${m}/${day} (${diff}日後)`;
+            return `${m}/${day}`;
+        };
+
+        const formatIncomingDate = (dateStr) => {
+            if (!dateStr) return '—';
+            const d = new Date(dateStr);
+            const m = d.getMonth() + 1;
+            const day = d.getDate();
+            return `${m}/${day}`;
+        };
+
+        const formatPrice = (price) => {
+            if (!price && price !== 0) return '—';
+            return `¥${Number(price).toLocaleString('ja-JP')}`;
+        };
+
+        const formatQuantity = (qty) => {
+            if (!qty && qty !== 0) return '—';
+            return Number(qty).toLocaleString('ja-JP');
+        };
+
+        const calculateTotal = (quantity, unitPrice) => {
+            const qty = Number(quantity) || 0;
+            const price = Number(unitPrice) || 0;
+            return qty * price;
+        };
+
+        const generateId = () => Date.now() + Math.random();
+
+        // ============================
+        // 年月度フィルター関連
+        // ============================
+        const getAvailableMonths = (incomingTasks, outgoingTasks) => {
+            const months = new Set();
+            
+            // 入庫データから入庫日の年月を抽出
+            incomingTasks.forEach(task => {
+                if (task.incomingDate) {
+                    const d = new Date(task.incomingDate);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    months.add(key);
+                }
+            });
+            
+            // 出庫データから出庫日の年月を抽出
+            outgoingTasks.forEach(task => {
+                if (task.outgoingDate) {
+                    const d = new Date(task.outgoingDate);
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    months.add(key);
+                }
+            });
+            
+            // ソートして返す
+            return Array.from(months).sort().reverse(); // 新しい月が上
+        };
+
+        const formatMonthLabel = (monthKey) => {
+            if (monthKey === 'all') return 'すべての月度';
+            const [year, month] = monthKey.split('-');
+            return `${year}年${parseInt(month)}月度`;
+        };
+
+        const filterByMonth = (tasks, monthKey, isOutgoing) => {
+            if (monthKey === 'all') return tasks;
+            
+            const [year, month] = monthKey.split('-');
+            const targetYear = parseInt(year);
+            const targetMonth = parseInt(month);
+            
+            return tasks.filter(task => {
+                const dateValue = isOutgoing ? task.outgoingDate : task.incomingDate;
+                if (!dateValue) return false;
+                
+                const d = new Date(dateValue);
+                return d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth;
+            });
+        };
+
+        const DEFAULT_TASKS = [
+            { id: 1, title: 'A4コピー用紙 (500枚入)', assignee: '山田太郎', incomingDate: '2026-02-20', status: 'instock', priority: 'low', completed: false, quantity: 50, supplier: '株式会社オフィスワン', unitPrice: 2500, comment: '注文日: 2026-02-10' },
+            { id: 2, title: 'トナーカートリッジ Black', assignee: '佐藤花子', incomingDate: '2026-02-15', status: 'lowstock', priority: 'high', completed: false, quantity: 3, supplier: 'キヤノンマーケティング', unitPrice: 8500, comment: '注文日: 2026-02-05' },
+            { id: 3, title: '付箋紙 75x75mm 5色パック', assignee: '田中一郎', incomingDate: '2026-02-28', status: 'instock', priority: 'low', completed: false, quantity: 120, supplier: 'スリーエムジャパン', unitPrice: 450, comment: '' },
+            { id: 4, title: 'ホワイトボードマーカー 赤', assignee: '鈴木美咲', incomingDate: '2026-02-14', status: 'outofstock', priority: 'high', completed: false, quantity: 0, supplier: 'ぺんてる株式会社', unitPrice: 180, comment: '注文日: 2026-02-08 / 緊急対応' },
+            { id: 5, title: 'クリアファイル A4 100枚', assignee: '高橋健一', incomingDate: '2026-03-01', status: 'ordered', priority: 'medium', completed: false, quantity: 100, supplier: 'コクヨ株式会社', unitPrice: 3200, comment: '注文日: 2026-02-12' },
+            { id: 6, title: 'ボールペン 黒 0.5mm 12本', assignee: '山田太郎', incomingDate: '2026-02-18', status: 'lowstock', priority: 'medium', completed: false, quantity: 8, supplier: '三菱鉛筆株式会社', unitPrice: 1200, comment: '' },
+            { id: 7, title: 'ステープラー針 No.10', assignee: '佐藤花子', incomingDate: '2026-03-10', status: 'instock', priority: 'low', completed: true, quantity: 500, supplier: 'マックス株式会社', unitPrice: 280, comment: '注文日: 2026-02-25' },
+            { id: 8, title: 'デスクトレー 3段式', assignee: '田中一郎', incomingDate: '2026-02-25', status: 'ordered', priority: 'medium', completed: false, quantity: 10, supplier: 'リヒトラブ', unitPrice: 1980, comment: '注文日: 2026-02-11' },
+        ];
+
+        const DEFAULT_OUTGOING = [
+            { id: 101, title: 'A4コピー用紙 (500枚入)', assignee: '山田太郎', outgoingDate: '2026-02-10', status: 'instock', quantity: 10, completed: false },
+            { id: 102, title: 'ボールペン 黒 0.5mm 12本', assignee: '鈴木美咲', outgoingDate: '2026-02-11', status: 'lowstock', quantity: 5, completed: false },
+            { id: 103, title: '付箋紙 75x75mm 5色パック', assignee: '高橋健一', outgoingDate: '2026-02-09', status: 'instock', quantity: 20, completed: true },
+        ];
+
+        // ============================
+        // Storage
+        // ============================
+        const STORAGE_KEY = 'inventory-todo-tasks';
+        const STORAGE_KEY_OUT = 'inventory-todo-outgoing';
+        const STORAGE_KEY_LAST_SAVE = 'inventory-last-save-time';
+
+        const loadTasks = () => {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw || typeof raw !== 'string') return DEFAULT_TASKS;
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : DEFAULT_TASKS;
+            } catch { return DEFAULT_TASKS; }
+        };
+
+        const saveTasks = (tasks) => {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+            } catch {}
+        };
+
+        const loadOutgoing = () => {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_OUT);
+                if (!raw || typeof raw !== 'string') return DEFAULT_OUTGOING;
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : DEFAULT_OUTGOING;
+            } catch { return DEFAULT_OUTGOING; }
+        };
+
+        const saveOutgoing = (tasks) => {
+            try {
+                localStorage.setItem(STORAGE_KEY_OUT, JSON.stringify(tasks));
+            } catch {}
+        };
+
+        const loadLastSaveTime = () => {
+            try {
+                return localStorage.getItem(STORAGE_KEY_LAST_SAVE) || null;
+            } catch { return null; }
+        };
+
+        const saveLastSaveTime = () => {
+            try {
+                const now = new Date().toISOString();
+                localStorage.setItem(STORAGE_KEY_LAST_SAVE, now);
+                return now;
+            } catch { return null; }
+        };
+
+        const formatSaveTime = (isoString) => {
+            if (!isoString) return '未保存';
+            const d = new Date(isoString);
+            const year = d.getFullYear();
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+        };
+
+        // ============================
+        // Login Component
+        // ============================
+        const LoginScreen = ({ onLoginSuccess }) => {
+            const [isInitialSetup, setIsInitialSetup] = useState(!UserManager.isInitialized());
+            const [userId, setUserId] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState('');
+            const [error, setError] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [lockRemainingMs, setLockRemainingMs] = useState(0);
+            const lockTimerRef = useRef(null);
+
+            // ロック中はカウントダウンを表示し、解除時に自動でフォームを再有効化
+            useEffect(() => {
+                if (lockRemainingMs <= 0) return;
+                lockTimerRef.current = setInterval(() => {
+                    const uid      = userId.trim();
+                    const remaining = LoginAttemptManager.getRemainingLockMs(uid);
+                    if (remaining <= 0) {
+                        setLockRemainingMs(0);
+                        setError('');
+                        clearInterval(lockTimerRef.current);
+                    } else {
+                        setLockRemainingMs(remaining);
+                    }
+                }, 1000);
+                return () => clearInterval(lockTimerRef.current);
+            }, [lockRemainingMs]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setIsLoading(true);
+
+                try {
+                    if (isInitialSetup) {
+                        const uid  = (userId   != null && typeof userId   === 'string') ? userId.trim()   : '';
+                        const pwd  = (password != null && typeof password === 'string') ? password        : '';
+                        const conf = (confirmPassword != null && typeof confirmPassword === 'string') ? confirmPassword : '';
+                        if (!uid) {
+                            setError('ユーザーIDを入力してください');
+                            setIsLoading(false);
+                            return;
+                        }
+                        // パスワードポリシーチェック（8文字以上・英字・数字）
+                        const policyResult = validatePasswordPolicy(pwd);
+                        if (!policyResult.valid) {
+                            setError(policyResult.error);
+                            setIsLoading(false);
+                            return;
+                        }
+                        if (pwd !== conf) {
+                            setError('パスワードが一致しません');
+                            setIsLoading(false);
+                            return;
+                        }
+
+                        await UserManager.initializeMasterAccount(uid, pwd);
+                        SecureStorage.initMasterKeyForUser(uid, pwd);
+                        const session = await UserManager.authenticate(uid, pwd);
+                        onLoginSuccess(session);
+                    } else {
+                        if (!userId.trim() || !password) {
+                            setError('ユーザーIDとパスワードを入力してください');
+                            setIsLoading(false);
+                            return;
+                        }
+
+                        const session = await UserManager.authenticate(userId.trim(), password);
+                        if (session) {
+                            if (!SecureStorage.unlockMasterKey(userId.trim(), password)) {
+                                setError('データ復号に失敗しました。LocalStorageをクリアして再登録してください。');
+                                setIsLoading(false);
+                                return;
+                            }
+                            onLoginSuccess(session);
+                        } else {
+                            // 残り試行回数を表示（ロック直前の警告）
+                            const remaining = LoginAttemptManager.getRemainingAttempts(userId.trim());
+                            if (remaining > 0) {
+                                setError(`ユーザーIDまたはパスワードが正しくありません（残り${remaining}回で一時ロック）`);
+                            } else {
+                                setError('ユーザーIDまたはパスワードが正しくありません');
+                            }
+                        }
+                    }
+                } catch (err) {
+                    const msg = err.message || 'エラーが発生しました';
+                    setError(msg);
+                    // ロックエラーの場合はカウントダウンを開始
+                    if (LoginAttemptManager.isLocked(userId.trim())) {
+                        setLockRemainingMs(LoginAttemptManager.getRemainingLockMs(userId.trim()));
+                    }
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="login-container">
+                    <div className="login-box animate-slideDown">
+                        <div className="login-header">
+                            <div className="login-logo">
+                                <AppLogo />
+                            </div>
+                            <h1 className="login-title">
+                                {isInitialSetup ? '初期セットアップ' : '在庫管理 TODO'}
+                            </h1>
+                            <p className="login-subtitle">
+                                {isInitialSetup 
+                                    ? '管理者アカウントを作成してください' 
+                                    : 'ログインして続行'}
+                            </p>
+                        </div>
+
+                        {error && (
+                            <div className="login-error animate-fadeIn">
+                                <IconAlertTriangle size={16} />
+                                {error}
+                                {lockRemainingMs > 0 && (
+                                    <span style={{ display: 'block', marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+                                        解除まで {Math.ceil(lockRemainingMs / 1000)} 秒
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        <form className="login-form" onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label className="form-label">ユーザーID</label>
+                                <input
+                                    className="input-field"
+                                    type="text"
+                                    value={userId}
+                                    onChange={(e) => setUserId(e.target.value)}
+                                    placeholder="ユーザーIDを入力"
+                                    autoFocus
+                                    disabled={isLoading || lockRemainingMs > 0}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label className="form-label">パスワード</label>
+                                <input
+                                    className="input-field"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="パスワードを入力"
+                                    disabled={isLoading || lockRemainingMs > 0}
+                                />
+                                {isInitialSetup && (
+                                    <p style={{ marginTop: 5, fontSize: 11, color: 'var(--navy-400)', lineHeight: 1.5 }}>
+                                        ※ 8文字以上・英字（a-z / A-Z）と数字（0-9）を両方含めてください
+                                    </p>
+                                )}
+                            </div>
+
+                            {isInitialSetup && (
+                                <div className="form-group">
+                                    <label className="form-label">パスワード（確認）</label>
+                                    <input
+                                        className="input-field"
+                                        type="password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="パスワードを再入力"
+                                        disabled={isLoading}
+                                    />
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                style={{ width: '100%', marginTop: '8px' }}
+                                disabled={isLoading || lockRemainingMs > 0}
+                            >
+                                {isLoading
+                                    ? '処理中...'
+                                    : lockRemainingMs > 0
+                                        ? `ロック中（${Math.ceil(lockRemainingMs / 1000)}秒後に解除）`
+                                        : isInitialSetup ? 'アカウント作成' : 'ログイン'
+                                }
+                            </button>
+                        </form>
+
+                        {isInitialSetup && (
+                            <div style={{ marginTop: '20px', padding: '14px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '8px', fontSize: '12px', color: 'var(--navy-300)' }}>
+                                <strong style={{ color: 'var(--info)' }}>📌 重要:</strong>
+                                <ul style={{ marginTop: '8px', marginLeft: '20px', lineHeight: '1.6' }}>
+                                    <li>このアカウントは管理者権限を持ちます</li>
+                                    <li>他のユーザーを追加・管理できます</li>
+                                    <li>パスワードは安全に保管してください</li>
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ============================
+        // User Management Modal
+        // ============================
+        const UserManagementModal = ({ onClose, currentUser }) => {
+            const [users, setUsers] = useState(() => UserManager.getUsers() || []);
+            const [showAddUser, setShowAddUser] = useState(false);
+            const [newUserId, setNewUserId] = useState('');
+            const [newPassword, setNewPassword] = useState('');
+            const [newRole, setNewRole] = useState('user');
+            const [error, setError] = useState('');
+            const [success, setSuccess] = useState('');
+
+            // マウント時に管理者権限をセッションDBと照合して再検証（迂回攻撃の防止）
+            useEffect(() => {
+                try { assertCanAdmin(); } catch { onClose(); }
+            }, []);
+
+            const handleAddUser = async (e) => {
+                e.preventDefault();
+                setError('');
+                setSuccess('');
+
+                try {
+                    assertCanAdmin();
+                } catch (err) {
+                    setError(err.message);
+                    return;
+                }
+
+                try {
+                    if (!newUserId.trim()) {
+                        setError('ユーザーIDを入力してください');
+                        return;
+                    }
+                    // パスワードポリシーチェック（8文字以上・英字・数字）
+                    const addModalPolicy = validatePasswordPolicy(newPassword);
+                    if (!addModalPolicy.valid) {
+                        setError(addModalPolicy.error);
+                        return;
+                    }
+
+                    await UserManager.addUser(newUserId, newPassword, newRole);
+                    setUsers(UserManager.getUsers() || []);
+                    setSuccess('ユーザーを追加しました');
+                    setNewUserId('');
+                    setNewPassword('');
+                    setNewRole('user');
+                    setShowAddUser(false);
+                } catch (err) {
+                    setError(err.message);
+                }
+            };
+
+            const handleDeleteUser = (userId) => {
+                try { assertCanAdmin(); } catch (err) { setError(err.message); return; }
+                if (userId === currentUser.userId) {
+                    setError('自分自身を削除することはできません');
+                    return;
+                }
+
+                if (confirm(`ユーザー「${userId}」を削除しますか？`)) {
+                    try {
+                        UserManager.deleteUser(userId);
+                        setUsers(UserManager.getUsers() || []);
+                        setSuccess('ユーザーを削除しました');
+                    } catch (err) {
+                        setError(err.message);
+                    }
+                }
+            };
+
+            return (
+                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+                    <div className="modal-content" style={{ width: '600px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, var(--cyan-500), #0891b2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <IconUser size={20} color="white" />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>ユーザー管理</h2>
+                                    <p style={{ fontSize: 12, color: 'var(--navy-400)', marginTop: 2 }}>ユーザーの追加・削除</p>
+                                </div>
+                            </div>
+                            <button className="action-btn" onClick={onClose}><IconX /></button>
+                        </div>
+
+                        {error && (
+                            <div className="login-error animate-fadeIn" style={{ marginBottom: '16px' }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {success && (
+                            <div className="login-success animate-fadeIn" style={{ marginBottom: '16px' }}>
+                                {success}
+                            </div>
+                        )}
+
+                        {!showAddUser ? (
+                            <>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <button className="btn btn-primary" onClick={() => setShowAddUser(true)}>
+                                        <IconPlus size={16} /> 新規ユーザー追加
+                                    </button>
+                                </div>
+
+                                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                    <table className="task-table">
+                                        <thead>
+                                            <tr>
+                                                <th>ユーザーID</th>
+                                                <th>権限</th>
+                                                <th>作成日</th>
+                                                <th style={{ width: 80 }}>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(user => (
+                                                <tr key={user.id}>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            <IconUser size={14} color="var(--cyan-400)" />
+                                                            <span style={{ fontWeight: 500 }}>{user.id}</span>
+                                                            {user.id === currentUser.userId && (
+                                                                <span style={{ fontSize: 11, color: 'var(--cyan-400)', background: 'rgba(6, 182, 212, 0.15)', padding: '2px 8px', borderRadius: '10px' }}>
+                                                                    現在のユーザー
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`badge ${user.role === 'admin' ? 'badge-ordered' : user.role === 'guest' ? 'badge-outofstock' : 'badge-instock'}`}>
+                                                            {getRoleLabel(user.role)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="mono" style={{ fontSize: 13, color: 'var(--navy-300)' }}>
+                                                        {new Date(user.createdAt).toLocaleDateString('ja-JP')}
+                                                    </td>
+                                                    <td>
+                                                        {user.id !== currentUser.userId && (
+                                                            <button 
+                                                                className="action-btn danger" 
+                                                                onClick={() => handleDeleteUser(user.id)}
+                                                                title="削除"
+                                                            >
+                                                                <IconTrash size={15} />
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        ) : (
+                            <form onSubmit={handleAddUser}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                                    <div>
+                                        <label className="form-label">ユーザーID <span style={{ color: 'var(--cyan-500)' }}>*</span></label>
+                                        <input
+                                            className="input-field"
+                                            type="text"
+                                            value={newUserId}
+                                            onChange={(e) => setNewUserId(e.target.value)}
+                                            placeholder="ユーザーIDを入力"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label">パスワード <span style={{ color: 'var(--cyan-500)' }}>*</span></label>
+                                        <input
+                                            className="input-field"
+                                            type="password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="8文字以上・英字+数字"
+                                        />
+                                        <p style={{ marginTop: 4, fontSize: 11, color: 'var(--navy-400)', lineHeight: 1.5 }}>
+                                            ※ 8文字以上・英字（a-z / A-Z）と数字（0-9）を両方含めてください
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label">権限</label>
+                                        <select className="input-field" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                                            <option value="guest">閲覧のみ（guest）</option>
+                                            <option value="user">編集可（user）</option>
+                                            <option value="admin">管理者（全権限）</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--navy-700)' }}>
+                                    <button type="button" className="btn btn-secondary" onClick={() => { setShowAddUser(false); setError(''); }}>
+                                        キャンセル
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">
+                                        <IconPlus size={16} color="white" /> ユーザー追加
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ============================
+        // Modal Component (入庫・出庫共用)
+        // ============================
+        const TaskModal = ({ task, onSave, onClose, modalType }) => {
+            const isEdit = !!task;
+            const isOutgoing = modalType === 'outgoing';
+
+            const [form, setForm] = useState({
+                title: task?.title || '',
+                assignee: task?.assignee || '',
+                incomingDate: task?.incomingDate || '',
+                outgoingDate: task?.outgoingDate || '',
+                status: task?.status || 'instock',
+                priority: task?.priority || 'medium',
+                quantity: task?.quantity || '',
+                supplier: task?.supplier || '',
+                unitPrice: task?.unitPrice || '',
+                comment: task?.comment || '',
+            });
+
+            const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+
+            const totalAmount = calculateTotal(form.quantity, form.unitPrice);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!form.title.trim()) return;
+
+                const base = {
+                    ...(task || {}),
+                    id: task?.id || generateId(),
+                    completed: task?.completed || false,
+                    title: form.title.trim(),
+                    assignee: form.assignee.trim(),
+                    status: form.status,
+                    quantity: form.quantity ? Number(form.quantity) : 0,
+                };
+
+                if (isOutgoing) {
+                    onSave({
+                        ...base,
+                        outgoingDate: form.outgoingDate,
+                    });
+                } else {
+                    onSave({
+                        ...base,
+                        incomingDate: form.incomingDate,
+                        priority: form.priority,
+                        supplier: form.supplier.trim(),
+                        unitPrice: form.unitPrice ? Number(form.unitPrice) : 0,
+                        comment: form.comment.trim(),
+                    });
+                }
+            };
+
+            useEffect(() => {
+                const handleEsc = (e) => { if (e.key === 'Escape') onClose(); };
+                window.addEventListener('keydown', handleEsc);
+                return () => window.removeEventListener('keydown', handleEsc);
+            }, [onClose]);
+
+            const accentColor = isOutgoing ? '#f59e0b' : 'var(--cyan-500)';
+            const accentGrad = isOutgoing ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, var(--cyan-500), #0891b2)';
+            const typeLabel = isOutgoing ? '出庫' : '入庫';
+
+            return (
+                <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+                    <div className="modal-content">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: accentGrad, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {isEdit ? <IconEdit size={20} color="white" /> : isOutgoing ? <IconLogOut size={20} color="white" /> : <IconPackage size={20} color="white" />}
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>
+                                        {isEdit ? `${typeLabel}データ編集` : `新規${typeLabel}登録`}
+                                    </h2>
+                                    <p style={{ fontSize: 12, color: 'var(--navy-400)', marginTop: 2 }}>
+                                        {isEdit ? `${typeLabel}情報を更新します` : `${typeLabel}アイテムを登録します`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button className="action-btn" onClick={onClose}><IconX /></button>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        アイテム名 <span style={{ color: accentColor }}>*</span>
+                                    </label>
+                                    <input className="input-field" type="text" placeholder="例：A4コピー用紙 500枚入" value={form.title} onChange={(e) => handleChange('title', e.target.value)} autoFocus />
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>担当者</label>
+                                        <input className="input-field" type="text" placeholder="担当者名" value={form.assignee} onChange={(e) => handleChange('assignee', e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            {isOutgoing ? '出庫日' : '入庫日'}
+                                        </label>
+                                        <input 
+                                            className="input-field mono" 
+                                            type="date" 
+                                            value={isOutgoing ? form.outgoingDate : form.incomingDate} 
+                                            onChange={(e) => handleChange(isOutgoing ? 'outgoingDate' : 'incomingDate', e.target.value)} 
+                                        />
+                                    </div>
+                                </div>
+
+                                {isOutgoing ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ステータス</label>
+                                            <select className="input-field" value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
+                                                {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>出庫数量</label>
+                                            <input className="input-field mono" type="number" min="0" placeholder="0" value={form.quantity} onChange={(e) => handleChange('quantity', e.target.value)} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ステータス</label>
+                                                <select className="input-field" value={form.status} onChange={(e) => handleChange('status', e.target.value)}>
+                                                    {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>重要度</label>
+                                                <select className="input-field" value={form.priority} onChange={(e) => handleChange('priority', e.target.value)}>
+                                                    {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>数量</label>
+                                                <input className="input-field mono" type="number" min="0" placeholder="0" value={form.quantity} onChange={(e) => handleChange('quantity', e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>仕入れ先</label>
+                                                <input className="input-field" type="text" placeholder="例：株式会社〇〇" value={form.supplier} onChange={(e) => handleChange('supplier', e.target.value)} />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>単価（円）</label>
+                                            <input className="input-field mono" type="number" min="0" placeholder="0" value={form.unitPrice} onChange={(e) => handleChange('unitPrice', e.target.value)} />
+                                        </div>
+
+                                        {(form.quantity || form.unitPrice) && (
+                                            <div style={{ padding: '14px 18px', background: 'rgba(6, 182, 212, 0.08)', border: '1px solid rgba(6, 182, 212, 0.2)', borderRadius: 10 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <span style={{ fontSize: 12, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>合計金額</span>
+                                                    <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: 'var(--cyan-400)' }}>
+                                                        {formatPrice(totalAmount)}
+                                                    </span>
+                                                </div>
+                                                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--navy-500)' }}>
+                                                    {formatQuantity(form.quantity || 0)} × {formatPrice(form.unitPrice || 0)}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--navy-300)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                                コメント <span style={{ fontSize: 10, color: 'var(--navy-500)', fontWeight: 400, textTransform: 'none' }}>（注文日など）</span>
+                                            </label>
+                                            <textarea 
+                                                className="input-field" 
+                                                placeholder="例：注文日: 2026-02-10" 
+                                                value={form.comment} 
+                                                onChange={(e) => handleChange('comment', e.target.value)}
+                                                rows="2"
+                                                style={{ resize: 'vertical', fontFamily: "'Noto Sans JP', sans-serif", lineHeight: 1.5 }}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--navy-700)' }}>
+                                <button type="button" className="btn btn-secondary" onClick={onClose}>キャンセル</button>
+                                <button type="submit" className="btn btn-primary" style={ isOutgoing ? { background: accentGrad, boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' } : {} }>
+                                    {isEdit ? <IconCheck size={16} color="white" /> : <IconPlus size={16} color="white" />}
+                                    {isEdit ? '更新する' : `${typeLabel}登録`}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // ============================
+        // Main App
+        // ============================
+        const App = () => <MainAppContent />;
+
+        // ============================
+        // Main App Content
+        // ============================
+        const MainAppContent = () => {
+            const currentUser = { userId: 'local', role: 'admin' };
+            const [viewMode, setViewMode] = useState('incoming');
+            const [tasks, setTasks] = useState(loadTasks);
+            const [outgoing, setOutgoing] = useState(loadOutgoing);
+            const [lastSaveTime, setLastSaveTime] = useState(loadLastSaveTime);
+            const [selectedMonth, setSelectedMonth] = useState('all'); // 年月度フィルター
+            const [search, setSearch] = useState('');
+            const [activeFilter, setActiveFilter] = useState('all');
+            const [sortKey, setSortKey] = useState(null);
+            const [sortDir, setSortDir] = useState('asc');
+            const [showModal, setShowModal] = useState(false);
+            const [editTask, setEditTask] = useState(null);
+            const [selectedIds, setSelectedIds] = useState(new Set());
+            const [isSaving, setIsSaving] = useState(false);
+
+            useEffect(() => { saveTasks(tasks); }, [tasks]);
+            useEffect(() => { saveOutgoing(outgoing); }, [outgoing]);
+
+            const isOutgoingView = viewMode === 'outgoing';
+            
+            // 年月度でフィルタリングされたデータ
+            const monthFilteredIncoming = useMemo(() => 
+                filterByMonth(tasks, selectedMonth, false), 
+                [tasks, selectedMonth]
+            );
+            const monthFilteredOutgoing = useMemo(() => 
+                filterByMonth(outgoing, selectedMonth, true), 
+                [outgoing, selectedMonth]
+            );
+            
+            const currentData = isOutgoingView ? monthFilteredOutgoing : monthFilteredIncoming;
+            const setCurrentData = isOutgoingView ? setOutgoing : setTasks;
+
+            // 利用可能な年月度リストを生成
+            const availableMonths = useMemo(() => 
+                getAvailableMonths(tasks, outgoing), 
+                [tasks, outgoing]
+            );
+
+            const handleBulkSave = () => {
+                setIsSaving(true);
+                try {
+                    saveTasks(tasks);
+                    saveOutgoing(outgoing);
+                    const newSaveTime = saveLastSaveTime();
+                    setLastSaveTime(newSaveTime);
+                    
+                    // 保存完了のフィードバック
+                    setTimeout(() => setIsSaving(false), 800);
+                } catch (error) {
+                    console.error('保存エラー:', error);
+                    setIsSaving(false);
+                }
+            };
+
+            const handleViewChange = (mode) => {
+                setViewMode(mode);
+                setSearch('');
+                setActiveFilter('all');
+                setSortKey(null);
+                setSortDir('asc');
+                setSelectedIds(new Set());
+            };
+
+            // Stats
+            const stats = useMemo(() => {
+                const totalInventoryValue = tasks.reduce((sum, task) => {
+                    return sum + calculateTotal(task.quantity, task.unitPrice);
+                }, 0);
+                
+                return {
+                    total: currentData.length,
+                    instock: currentData.filter(t => t.status === 'instock').length,
+                    lowstock: currentData.filter(t => t.status === 'lowstock').length,
+                    outofstock: currentData.filter(t => t.status === 'outofstock').length,
+                    ordered: currentData.filter(t => t.status === 'ordered').length,
+                    completed: currentData.filter(t => t.completed).length,
+                    totalValue: totalInventoryValue,
+                };
+            }, [currentData, tasks]);
+
+            // Filter + Search + Sort
+            const filteredTasks = useMemo(() => {
+                let result = [...currentData];
+
+                if (search.trim()) {
+                    const q = search.toLowerCase();
+                    result = result.filter(t => {
+                        // アイテム名と担当者
+                        const matchesBasic = 
+                            t.title.toLowerCase().includes(q) ||
+                            (t.assignee && t.assignee.toLowerCase().includes(q));
+                        
+                        // 仕入れ先（入庫データのみ）
+                        const matchesSupplier = 
+                            !isOutgoingView && t.supplier && t.supplier.toLowerCase().includes(q);
+                        
+                        // 日付（入庫日または出庫日）
+                        const dateValue = isOutgoingView ? t.outgoingDate : t.incomingDate;
+                        const matchesDate = dateValue && dateValue.includes(q);
+                        
+                        // 日付フォーマット済みの値でも検索（例: 2/13, 2月13日など）
+                        let matchesFormattedDate = false;
+                        if (dateValue) {
+                            const d = new Date(dateValue);
+                            const month = d.getMonth() + 1;
+                            const day = d.getDate();
+                            const year = d.getFullYear();
+                            
+                            // 様々な日付形式で検索可能に
+                            matchesFormattedDate = 
+                                `${month}/${day}`.includes(q) ||
+                                `${month}月${day}日`.includes(q) ||
+                                `${year}/${month}/${day}`.includes(q) ||
+                                `${year}年${month}月${day}日`.includes(q);
+                        }
+                        
+                        return matchesBasic || matchesSupplier || matchesDate || matchesFormattedDate;
+                    });
+                }
+
+                if (activeFilter === 'completed') {
+                    result = result.filter(t => t.completed);
+                } else if (activeFilter !== 'all') {
+                    result = result.filter(t => t.status === activeFilter && !t.completed);
+                }
+
+                if (sortKey) {
+                    result.sort((a, b) => {
+                        let va = a[sortKey], vb = b[sortKey];
+                        if (sortKey === 'priority') {
+                            const order = { high: 0, medium: 1, low: 2 };
+                            va = order[va] ?? 3; vb = order[vb] ?? 3;
+                        }
+                        if (sortKey === 'status') {
+                            const order = { outofstock: 0, lowstock: 1, ordered: 2, instock: 3 };
+                            va = order[va]; vb = order[vb];
+                        }
+                        if (sortKey === 'totalPrice') {
+                            va = calculateTotal(a.quantity, a.unitPrice);
+                            vb = calculateTotal(b.quantity, b.unitPrice);
+                        }
+                        if (va < vb) return sortDir === 'asc' ? -1 : 1;
+                        if (va > vb) return sortDir === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                }
+
+                return result;
+            }, [currentData, search, activeFilter, sortKey, sortDir, isOutgoingView]);
+
+            // Handlers
+            const handleSort = (key) => {
+                if (sortKey === key) {
+                    setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                } else {
+                    setSortKey(key);
+                    setSortDir('asc');
+                }
+            };
+
+            const toggleComplete = (id) => {
+                setCurrentData(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+            };
+
+            const handleSaveTask = (taskData) => {
+                setCurrentData(prev => {
+                    const idx = prev.findIndex(t => t.id === taskData.id);
+                    if (idx >= 0) {
+                        const updated = [...prev];
+                        updated[idx] = taskData;
+                        return updated;
+                    }
+                    return [...prev, taskData];
+                });
+                setShowModal(false);
+                setEditTask(null);
+            };
+
+            const handleDelete = (id) => {
+                setCurrentData(prev => prev.filter(t => t.id !== id));
+                setSelectedIds(prev => { const s = new Set(prev); s.delete(id); return s; });
+            };
+
+            const handleBulkDelete = () => {
+                if (selectedIds.size === 0) return;
+                setCurrentData(prev => prev.filter(t => !selectedIds.has(t.id)));
+                setSelectedIds(new Set());
+            };
+
+            const toggleSelectAll = () => {
+                if (!canEdit(currentUser.role)) return;
+                if (selectedIds.size === filteredTasks.length) {
+                    setSelectedIds(new Set());
+                } else {
+                    setSelectedIds(new Set(filteredTasks.map(t => t.id)));
+                }
+            };
+
+            const toggleSelect = (id) => {
+                if (!canEdit(currentUser.role)) return;
+                setSelectedIds(prev => {
+                    const s = new Set(prev);
+                    s.has(id) ? s.delete(id) : s.add(id);
+                    return s;
+                });
+            };
+
+            const openEdit = (task) => {
+                if (!canEdit(currentUser.role)) return;
+                setEditTask(task);
+                setShowModal(true);
+            };
+
+            const openNew = () => {
+                if (!canEdit(currentUser.role)) return;
+                setEditTask(null);
+                setShowModal(true);
+            };
+
+            const SortIcon = ({ column }) => {
+                if (sortKey !== column) return <IconArrowUpDown size={12} color="var(--navy-400)" />;
+                return sortDir === 'asc' ? <IconChevronUp size={12} color="var(--cyan-400)" /> : <IconChevronDown size={12} color="var(--cyan-400)" />;
+            };
+
+            const StatusBadge = ({ status }) => {
+                const s = STATUSES.find(st => st.value === status);
+                if (!s) return null;
+                return <span className={`badge ${s.class}`}><span className="badge-dot" />{s.label}</span>;
+            };
+
+            const PriorityDisplay = ({ priority }) => {
+                const p = PRIORITIES.find(pr => pr.value === priority);
+                if (!p) return null;
+                const starCount = priority === 'high' ? 3 : priority === 'medium' ? 2 : 1;
+                return (
+                    <span className={p.class} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        {Array.from({ length: starCount }).map((_, i) => (
+                            <IconStar key={i} size={13} filled={true} />
+                        ))}
+                        <span style={{ marginLeft: 4, fontSize: 12, fontWeight: 600 }}>{p.label}</span>
+                    </span>
+                );
+            };
+
+            const viewLabel = isOutgoingView ? '出庫' : '入庫';
+
+            return (
+                <div>
+                    {/* ===== Header ===== */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }} className="animate-shelf">
+                            <AppLogo />
+                            <div>
+                                <h1 style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>在庫管理 TODO</h1>
+                                <p style={{ fontSize: 12, color: 'var(--navy-400)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <IconShelf size={14} color="var(--navy-400)" />
+                                    棚卸しタスク管理システム
+                                </p>
+                            </div>
+
+                            {/* Bulk Save Button（編集権限のみ） */}
+                            {canEdit(currentUser.role) && (
+                            <button 
+                                className="btn btn-primary" 
+                                onClick={handleBulkSave}
+                                disabled={isSaving}
+                                style={{ 
+                                    marginLeft: 20,
+                                    background: isSaving ? 'var(--navy-600)' : 'linear-gradient(135deg, #10b981, #059669)',
+                                    boxShadow: isSaving ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
+                                    opacity: isSaving ? 0.7 : 1,
+                                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                                }}
+                            >
+                                <IconSave size={16} color="white" />
+                                {isSaving ? '保存中...' : '一括保存'}
+                            </button>
+                            )}
+
+                            {/* Last Save Time */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'var(--navy-800)', border: '1px solid var(--navy-600)', borderRadius: 8 }}>
+                                <IconClock size={13} color="var(--navy-400)" />
+                                <span style={{ fontSize: 11, color: 'var(--navy-400)' }} className="mono">
+                                    {formatSaveTime(lastSaveTime)}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            {/* View Toggle Buttons */}
+                            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--navy-600)' }}>
+                                <button
+                                    onClick={() => handleViewChange('incoming')}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 7,
+                                        padding: '9px 16px', fontSize: 13, fontWeight: 600,
+                                        border: 'none', cursor: 'pointer',
+                                        fontFamily: "'Noto Sans JP', sans-serif",
+                                        background: !isOutgoingView ? 'linear-gradient(135deg, var(--cyan-500), #0891b2)' : 'var(--navy-800)',
+                                        color: !isOutgoingView ? 'white' : 'var(--navy-300)',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                >
+                                    <IconLogIn size={15} color={!isOutgoingView ? 'white' : 'var(--navy-400)'} />
+                                    入庫・注文登録
+                                </button>
+                                <button
+                                    onClick={() => handleViewChange('outgoing')}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 7,
+                                        padding: '9px 16px', fontSize: 13, fontWeight: 600,
+                                        border: 'none', cursor: 'pointer',
+                                        fontFamily: "'Noto Sans JP', sans-serif",
+                                        borderLeft: '1px solid var(--navy-600)',
+                                        background: isOutgoingView ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--navy-800)',
+                                        color: isOutgoingView ? 'white' : 'var(--navy-300)',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                >
+                                    <IconLogOut size={15} color={isOutgoingView ? 'white' : 'var(--navy-400)'} />
+                                    出庫登録
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ===== Search + Action Bar ===== */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {/* Month Filter Dropdown */}
+                            <div style={{ position: 'relative', minWidth: 180 }}>
+                                <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 1 }}>
+                                    <IconCalendar size={15} color="var(--cyan-400)" />
+                                </div>
+                                <select
+                                    className="input-field"
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(e.target.value)}
+                                    style={{ paddingLeft: 38, fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    <option value="all">すべての月度</option>
+                                    {availableMonths.map(month => (
+                                        <option key={month} value={month}>
+                                            {formatMonthLabel(month)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Search */}
+                            <div style={{ position: 'relative' }}>
+                                <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                                    <IconSearch size={16} color="var(--navy-400)" />
+                                </div>
+                                <input
+                                    className="input-field"
+                                    type="text"
+                                    placeholder={isOutgoingView ? "アイテム・担当者・出庫日を検索..." : "アイテム・担当者・期限・仕入れ先を検索..."}
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    style={{ paddingLeft: 38, width: 300 }}
+                                />
+                                {search && (
+                                    <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                                        <IconX size={14} color="var(--navy-400)" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {canEdit(currentUser.role) && (
+                        <button
+                            className="btn btn-primary"
+                            onClick={openNew}
+                            style={isOutgoingView ? { background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)' } : {}}
+                        >
+                            <IconPlus size={16} color="white" />
+                            新規{viewLabel}登録
+                        </button>
+                        )}
+                    </div>
+
+                    {/* ===== Stats Cards ===== */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }} className="animate-fadeIn">
+                        <div className="stat-card">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <IconBoxes size={16} color={isOutgoingView ? '#fbbf24' : 'var(--cyan-400)'} />
+                                <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>全アイテム</span>
+                            </div>
+                            <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: isOutgoingView ? '#fbbf24' : 'var(--cyan-400)' }}>{stats.total}</span>
+                        </div>
+                        <div className="stat-card">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />
+                                <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>在庫あり</span>
+                            </div>
+                            <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: '#34d399' }}>{stats.instock}</span>
+                        </div>
+                        <div className="stat-card">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning)' }} />
+                                <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>残少</span>
+                            </div>
+                            <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: '#fbbf24' }}>{stats.lowstock}</span>
+                        </div>
+                        <div className="stat-card">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--danger)' }} />
+                                <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>欠品</span>
+                            </div>
+                            <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: '#f87171' }}>{stats.outofstock}</span>
+                        </div>
+                        {!isOutgoingView && (
+                            <>
+                                <div className="stat-card">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--info)' }} />
+                                        <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>発注済</span>
+                                    </div>
+                                    <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: '#60a5fa' }}>{stats.ordered}</span>
+                                </div>
+                                <div className="stat-card" style={{ gridColumn: 'span 2' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <IconDollar size={16} color="var(--cyan-400)" />
+                                        <span style={{ fontSize: 11, color: 'var(--navy-400)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>在庫総額</span>
+                                    </div>
+                                    <span className="mono" style={{ fontSize: 24, fontWeight: 700, color: 'var(--cyan-400)' }}>{formatPrice(stats.totalValue)}</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* ===== Filters ===== */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }} className="animate-fadeIn">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}>
+                            <IconFilter size={14} color="var(--navy-400)" />
+                            <span style={{ fontSize: 12, color: 'var(--navy-400)', fontWeight: 600 }}>フィルタ</span>
+                        </div>
+                        
+                        {/* 月度フィルター表示 */}
+                        {selectedMonth !== 'all' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'rgba(6, 182, 212, 0.12)', border: '1px solid var(--cyan-500)', borderRadius: 16 }}>
+                                <IconCalendar size={13} color="var(--cyan-400)" />
+                                <span style={{ fontSize: 12, color: 'var(--cyan-400)', fontWeight: 600 }}>
+                                    {formatMonthLabel(selectedMonth)}
+                                </span>
+                                <button 
+                                    onClick={() => setSelectedMonth('all')} 
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                                >
+                                    <IconX size={12} color="var(--cyan-400)" />
+                                </button>
+                            </div>
+                        )}
+                        
+                        {[
+                            { key: 'all', label: 'すべて', count: stats.total },
+                            { key: 'instock', label: '在庫あり', count: stats.instock },
+                            { key: 'lowstock', label: '残少', count: stats.lowstock },
+                            { key: 'outofstock', label: '欠品', count: stats.outofstock },
+                            ...(!isOutgoingView ? [{ key: 'ordered', label: '発注済', count: stats.ordered }] : []),
+                            { key: 'completed', label: '完了済', count: stats.completed },
+                        ].map(f => (
+                            <button
+                                key={f.key}
+                                className={`filter-btn ${activeFilter === f.key ? 'active' : ''}`}
+                                onClick={() => setActiveFilter(f.key)}
+                                style={isOutgoingView && activeFilter === f.key ? { background: 'rgba(245, 158, 11, 0.12)', borderColor: '#f59e0b', color: '#fbbf24' } : {}}
+                            >
+                                {f.label}
+                                <span className="filter-count">{f.count}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* ===== Bulk Actions（編集権限のみ） ===== */}
+                    {canEdit(currentUser.role) && selectedIds.size > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: isOutgoingView ? 'rgba(245, 158, 11, 0.08)' : 'rgba(6, 182, 212, 0.08)', border: `1px solid ${isOutgoingView ? 'rgba(245, 158, 11, 0.2)' : 'rgba(6, 182, 212, 0.2)'}`, borderRadius: 10 }} className="animate-fadeIn">
+                            <span style={{ fontSize: 13, color: isOutgoingView ? '#fbbf24' : 'var(--cyan-400)', fontWeight: 600 }} className="mono">{selectedIds.size}件選択中</span>
+                            <button className="btn btn-danger" style={{ padding: '6px 14px', fontSize: 12 }} onClick={handleBulkDelete}>
+                                <IconTrash size={14} />一括削除
+                            </button>
+                            <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: 12 }} onClick={() => setSelectedIds(new Set())}>
+                                選択解除
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ===== Table ===== */}
+                    <div style={{ background: 'var(--navy-800)', border: '1px solid var(--navy-700)', borderRadius: 12, overflow: 'hidden' }} className="animate-fadeIn">
+                        {filteredTasks.length === 0 ? (
+                            <div className="empty-state">
+                                {isOutgoingView ? <IconLogOut size={48} color="var(--navy-500)" /> : <IconShelf size={48} color="var(--navy-500)" />}
+                                <p style={{ marginTop: 16, fontSize: 15, fontWeight: 500 }}>
+                                    {search ? '検索結果が見つかりません' : `${viewLabel}データがありません`}
+                                </p>
+                                <p style={{ marginTop: 6, fontSize: 13, color: 'var(--navy-500)' }}>
+                                    {search ? '別のキーワードで検索してみてください' : `「新規${viewLabel}登録」ボタンからアイテムを追加しましょう`}
+                                </p>
+                                {!search && canEdit(currentUser.role) && (
+                                    <button className="btn btn-primary" style={isOutgoingView ? { marginTop: 20, background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 2px 8px rgba(245,158,11,0.3)' } : { marginTop: 20 }} onClick={openNew}>
+                                        <IconPlus size={16} color="white" />新規{viewLabel}登録
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="task-table">
+                                    <thead>
+                                        <tr>
+                                            {canEdit(currentUser.role) && (
+                                            <th style={{ width: 44 }}>
+                                                <div className="custom-checkbox">
+                                                    <input type="checkbox" checked={selectedIds.size === filteredTasks.length && filteredTasks.length > 0} onChange={toggleSelectAll} />
+                                                    <span className="checkmark"><IconCheck size={12} color="white" /></span>
+                                                </div>
+                                            </th>
+                                            )}
+                                            <th className="sortable" onClick={() => handleSort('status')} style={{ width: 110 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>ステータス <SortIcon column="status" /></span>
+                                            </th>
+                                            <th className="sortable" onClick={() => handleSort('title')}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>アイテム名 <SortIcon column="title" /></span>
+                                            </th>
+                                            <th className="sortable" onClick={() => handleSort('quantity')} style={{ width: 90 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{isOutgoingView ? '出庫数' : '数量'} <SortIcon column="quantity" /></span>
+                                            </th>
+                                            {!isOutgoingView && (
+                                                <>
+                                                    <th className="sortable" onClick={() => handleSort('supplier')} style={{ width: 180 }}>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>仕入れ先 <SortIcon column="supplier" /></span>
+                                                    </th>
+                                                    <th className="sortable" onClick={() => handleSort('unitPrice')} style={{ width: 110 }}>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>単価 <SortIcon column="unitPrice" /></span>
+                                                    </th>
+                                                    <th className="sortable" onClick={() => handleSort('totalPrice')} style={{ width: 120 }}>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>金額 <SortIcon column="totalPrice" /></span>
+                                                    </th>
+                                                </>
+                                            )}
+                                            <th className="sortable" onClick={() => handleSort('assignee')} style={{ width: 120 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>担当者 <SortIcon column="assignee" /></span>
+                                            </th>
+                                            <th className="sortable" onClick={() => handleSort(isOutgoingView ? 'outgoingDate' : 'incomingDate')} style={{ width: 150 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{isOutgoingView ? '出庫日' : '入庫日'} <SortIcon column={isOutgoingView ? 'outgoingDate' : 'incomingDate'} /></span>
+                                            </th>
+                                            {!isOutgoingView && (
+                                                <th className="sortable" onClick={() => handleSort('priority')} style={{ width: 110 }}>
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>重要度 <SortIcon column="priority" /></span>
+                                                </th>
+                                            )}
+                                            {canEdit(currentUser.role) && <th style={{ width: 80 }}>操作</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredTasks.map((task, idx) => (
+                                            <tr key={task.id} className={task.completed ? 'completed' : ''} style={{ animationDelay: `${idx * 30}ms` }}>
+                                                {canEdit(currentUser.role) && (
+                                                <td>
+                                                    <div className="custom-checkbox">
+                                                        <input type="checkbox" checked={selectedIds.has(task.id)} onChange={() => toggleSelect(task.id)} />
+                                                        <span className="checkmark"><IconCheck size={12} color="white" /></span>
+                                                    </div>
+                                                </td>
+                                                )}
+                                                <td>
+                                                    <StatusBadge status={task.status} />
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                        {canEdit(currentUser.role) ? (
+                                                        <div className="custom-checkbox" style={{ flexShrink: 0 }}>
+                                                            <input type="checkbox" checked={task.completed} onChange={() => toggleComplete(task.id)} />
+                                                            <span className="checkmark"><IconCheck size={12} color="white" /></span>
+                                                        </div>
+                                                        ) : (
+                                                        <div style={{ width: 20, height: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {task.completed && <IconCheck size={12} color="var(--cyan-400)" />}
+                                                        </div>
+                                                        )}
+                                                        <div className={!isOutgoingView && task.comment ? "tooltip-wrapper" : ""} style={{ width: '100%' }}>
+                                                            <div style={{ fontWeight: 500, fontSize: 14, color: task.completed ? 'var(--navy-400)' : '#e2e8f0' }}>
+                                                                {task.title}
+                                                            </div>
+                                                            <div className="mono" style={{ fontSize: 11, color: 'var(--navy-500)', marginTop: 2 }}>
+                                                                ID: {String(task.id).slice(-6)}
+                                                            </div>
+                                                            {!isOutgoingView && task.comment && (
+                                                                <div className="tooltip">
+                                                                    {task.comment}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span className="mono" style={{ fontSize: 14, color: task.quantity === 0 ? '#f87171' : task.quantity < 10 ? '#fbbf24' : isOutgoingView ? '#fbbf24' : 'var(--cyan-400)', fontWeight: 600 }}>
+                                                        {formatQuantity(task.quantity)}
+                                                    </span>
+                                                </td>
+                                                {!isOutgoingView && (
+                                                    <>
+                                                        <td>
+                                                            <span style={{ fontSize: 13, color: 'var(--navy-300)' }}>{task.supplier || '—'}</span>
+                                                        </td>
+                                                        <td>
+                                                            <span className="mono" style={{ fontSize: 13, color: 'var(--navy-300)', fontWeight: 500 }}>
+                                                                {formatPrice(task.unitPrice)}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className="mono" style={{ fontSize: 14, color: 'var(--cyan-400)', fontWeight: 700 }}>
+                                                                {formatPrice(calculateTotal(task.quantity, task.unitPrice))}
+                                                            </span>
+                                                        </td>
+                                                    </>
+                                                )}
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <IconUser size={13} color="var(--navy-400)" />
+                                                        <span style={{ fontSize: 13 }}>{task.assignee || '—'}</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <IconCalendar size={13} color="var(--navy-400)" />
+                                                        {isOutgoingView ? (
+                                                            <span className="mono" style={{ fontSize: 13, color: 'var(--navy-300)' }}>
+                                                                {formatOutgoingDate(task.outgoingDate)}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="mono" style={{ fontSize: 13, color: 'var(--navy-300)' }}>
+                                                                {formatIncomingDate(task.incomingDate)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                {!isOutgoingView && (
+                                                    <td>
+                                                        <PriorityDisplay priority={task.priority} />
+                                                    </td>
+                                                )}
+                                                {canEdit(currentUser.role) && (
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 2 }}>
+                                                        <button className="action-btn" onClick={() => openEdit(task)} title="編集">
+                                                            <IconEdit size={15} />
+                                                        </button>
+                                                        <button className="action-btn danger" onClick={() => handleDelete(task.id)} title="削除">
+                                                            <IconTrash size={15} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                )}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Footer */}
+                        {filteredTasks.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid var(--navy-700)', background: 'rgba(17, 29, 53, 0.5)' }}>
+                                <span style={{ fontSize: 12, color: 'var(--navy-400)' }} className="mono">
+                                    {filteredTasks.length} / {currentData.length} 件表示
+                                </span>
+                                <span style={{ fontSize: 11, color: 'var(--navy-500)' }}>
+                                    最終更新: {new Date().toLocaleDateString('ja-JP')}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ===== Modal ===== */}
+                    {showModal && (
+                        <TaskModal
+                            task={editTask}
+                            modalType={isOutgoingView ? 'outgoing' : 'incoming'}
+                            onSave={handleSaveTask}
+                            onClose={() => { setShowModal(false); setEditTask(null); }}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
