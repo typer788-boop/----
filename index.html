@@ -1963,8 +1963,7 @@
             return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
           };
           const rnd = mulberry32(20260318);
-          const rInt = (min, max) =>
-            Math.floor(rnd() * (max - min + 1)) + min;
+          const rInt = (min, max) => Math.floor(rnd() * (max - min + 1)) + min;
           const rFloat = (min, max, dp = 2) =>
             parseFloat((min + rnd() * (max - min)).toFixed(dp));
 
@@ -2002,7 +2001,8 @@
 
           const stored = await secureGet(key, []);
           const base = Array.isArray(stored) ? stored : [];
-          const isYieldRec = (r) => r && r.rawMaterial !== undefined && r.rawMaterial !== null;
+          const isYieldRec = (r) =>
+            r && r.rawMaterial !== undefined && r.rawMaterial !== null;
           const isOpRec = (r) =>
             r && r.availableTime !== undefined && r.availableTime !== null;
           const matchDateShift = (r, d, s) =>
@@ -2018,7 +2018,10 @@
             const dStr = mkDate(day);
 
             // --- 歩留（yield） ---
-            if (yieldCount < 10 && !base.some((r) => isYieldRec(r) && matchDateShift(r, dStr, shift))) {
+            if (
+              yieldCount < 10 &&
+              !base.some((r) => isYieldRec(r) && matchDateShift(r, dStr, shift))
+            ) {
               const raw = rInt(850, 1300);
               const stdRate = rFloat(92.0, 97.0, 2);
               const actRate = Math.max(85, stdRate - rFloat(0.3, 2.4, 2));
@@ -2052,7 +2055,10 @@
             }
 
             // --- 可動率（operating） ---
-            if (opCount < 10 && !base.some((r) => isOpRec(r) && matchDateShift(r, dStr, shift))) {
+            if (
+              opCount < 10 &&
+              !base.some((r) => isOpRec(r) && matchDateShift(r, dStr, shift))
+            ) {
               const available = 480;
               const actualOp = rInt(340, 465);
               const downtime = Math.max(0, available - actualOp);
